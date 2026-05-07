@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment — NEVER commit real keys
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+dist-ssr/
+build/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude Code memory / session files
+.claude/
