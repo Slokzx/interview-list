@@ -15,7 +15,7 @@ function extractEmail(emails) {
 }
 
 router.post('/', async (req, res) => {
-  const { gmailToken, userId } = req.body
+  const { gmailToken, gmailRefreshToken, userId } = req.body
   if (!gmailToken || !userId) {
     return res.status(400).json({ error: 'gmailToken and userId required' })
   }
@@ -35,7 +35,8 @@ router.post('/', async (req, res) => {
   try {
     send({ step: 'fetching', message: 'Connecting to Gmail…' })
     const emails = await fetchJobEmails(gmailToken, (msg) =>
-      send({ step: 'fetching', message: msg })
+      send({ step: 'fetching', message: msg }),
+      gmailRefreshToken,
     )
     send({ step: 'fetching', message: `Found ${emails.length} job-related emails.` })
 

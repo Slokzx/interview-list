@@ -1,32 +1,37 @@
 import './index.css'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AuthCallback from './pages/AuthCallback'
-import { useAuth } from './hooks/useAuth'
+import Research from './pages/Research'
+import Receipts from './pages/Receipts'
+import Sidebar from './components/Sidebar'
 
-function ProtectedRoute({ children }) {
+function ProtectedLayout({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
-  return children
+  return (
+    <div className="flex min-h-screen bg-background text-on-background font-sans">
+      <Sidebar />
+      <div className="flex-1 min-w-0 overflow-auto">
+        {children}
+      </div>
+    </div>
+  )
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="/login"          element={<Login />} />
+        <Route path="/auth/callback"  element={<AuthCallback />} />
+        <Route path="/dashboard"      element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
+        <Route path="/research"       element={<ProtectedLayout><Research /></ProtectedLayout>} />
+        <Route path="/receipts"       element={<ProtectedLayout><Receipts /></ProtectedLayout>} />
+        <Route path="*"               element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   )

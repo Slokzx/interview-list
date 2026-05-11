@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../hooks/useAuth'
-import { useTheme } from '../hooks/useTheme'
 import { getApplications, syncEmails, deleteApplication, enrichCompanies, backfillRecruiterEmails } from '../lib/api'
 import CompanyTable from '../components/CompanyTable'
 import CompanyPanel from '../components/CompanyPanel'
@@ -9,6 +7,16 @@ import StageChart from '../components/StageChart'
 
 const STAGES = ['Applied', 'Phone Screen', 'Technical', 'Onsite', 'Offer', 'Rejected']
 const SIZE_TIERS = ['Startup', 'Small', 'Mid-size', 'Large', 'Enterprise']
+
+// Scheduling proxies that send emails on behalf of recruiters
+const PROXY_RE = /jobhire/i
+
+function isViaProxy(company) {
+  const emails = Array.isArray(company.raw_emails) ? company.raw_emails : []
+  return emails.some(e => PROXY_RE.test(e.from ?? '')) ||
+    PROXY_RE.test(company.company_domain ?? '') ||
+    PROXY_RE.test(company.recruiter_email ?? '')
+}
 
 function bucketSize(raw) {
   if (!raw) return null
@@ -22,8 +30,6 @@ function bucketSize(raw) {
 }
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth()
-  const { theme, toggleTheme } = useTheme()
 
   const [companies, setCompanies]       = useState([])
   const [loading, setLoading]           = useState(true)
@@ -34,13 +40,16 @@ export default function Dashboard() {
   const [enriching, setEnriching]       = useState(false)
   const [enrichStatus, setEnrichStatus] = useState(null)
   const [selectedIds, setSelectedIds]   = useState(new Set())
-  const [chartsOpen, setChartsOpen]       = useState(false)
+  const [chartsOpen, setChartsOpen]     = useState(false)
+  const [editMode, setEditMode]         = useState(false)
 
   // ── Filter state (lifted so charts react to filters) ────────
   const [search, setSearch]           = useState('')
   const [stageFilters, setStages]     = useState(new Set())
   const [sizeFilters, setSizeFilters] = useState(new Set())
   const [sizeOpen, setSizeOpen]       = useState(false)
+  const [referredOnly, setReferredOnly]   = useState(false)
+  const [viaProxyOnly, setViaProxyOnly]   = useState(false)
   const [dateFrom, setDateFrom]       = useState('')
   const [dateTo, setDateTo]           = useState('')
 
@@ -57,6 +66,8 @@ export default function Dashboard() {
     }
     if (stageFilters.size > 0) rows = rows.filter((c) => stageFilters.has(c.stage))
     if (sizeFilters.size > 0)  rows = rows.filter((c) => sizeFilters.has(bucketSize(c.company_size)))
+    if (referredOnly)          rows = rows.filter((c) => c.referred)
+    if (viaProxyOnly)          rows = rows.filter((c) => isViaProxy(c))
     if (dateFrom) {
       const from = new Date(dateFrom).getTime()
       rows = rows.filter((c) => c.last_email_date && new Date(c.last_email_date).getTime() >= from)
@@ -66,11 +77,11 @@ export default function Dashboard() {
       rows = rows.filter((c) => c.last_email_date && new Date(c.last_email_date).getTime() <= to)
     }
     return rows
-  }, [companies, search, stageFilters, sizeFilters, dateFrom, dateTo])
+  }, [companies, search, stageFilters, sizeFilters, referredOnly, viaProxyOnly, dateFrom, dateTo])
 
-  const hasFilter = search || stageFilters.size > 0 || sizeFilters.size > 0 || dateFrom || dateTo
+  const hasFilter = search || stageFilters.size > 0 || sizeFilters.size > 0 || referredOnly || viaProxyOnly || dateFrom || dateTo
 
-  function clearFilters() { setSearch(''); setStages(new Set()); setSizeFilters(new Set()); setDateFrom(''); setDateTo('') }
+  function clearFilters() { setSearch(''); setStages(new Set()); setSizeFilters(new Set()); setReferredOnly(false); setViaProxyOnly(false); setDateFrom(''); setDateTo('') }
 
   function toggleSize(tier) {
     setSizeFilters((prev) => { const n = new Set(prev); n.has(tier) ? n.delete(tier) : n.add(tier); return n })
@@ -105,13 +116,14 @@ export default function Dashboard() {
     setSyncStatus({ type: 'info', message: 'Starting…' })
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const gmailToken  = session?.provider_token
-      const accessToken = session?.access_token
-      const userId      = session?.user?.id
+      const gmailToken         = session?.provider_token
+      const gmailRefreshToken  = session?.provider_refresh_token
+      const accessToken        = session?.access_token
+      const userId             = session?.user?.id
       if (!gmailToken) { setSyncStatus({ type: 'error', message: 'Gmail token missing — sign out and sign back in.' }); return }
       if (!accessToken || !userId) { setSyncStatus({ type: 'error', message: 'Not authenticated. Please refresh.' }); return }
       await syncEmails({
-        gmailToken, userId, accessToken,
+        gmailToken, gmailRefreshToken, userId, accessToken,
         onEvent(event) {
           if (event.step === 'error') {
             setSyncStatus({ type: 'error', message: event.message })
@@ -177,34 +189,7 @@ export default function Dashboard() {
   const totalInterviews  = filtered.reduce((s, c) => s + (c.interview_count ?? 0), 0)
 
   return (
-    <div className="relative min-h-screen bg-background text-on-background font-sans">
-
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between h-14 px-6 md:px-10 bg-nav backdrop-blur-xl border-b border-outline-variant/30">
-        <span className="absolute left-1/2 -translate-x-1/2 font-display text-lg font-bold tracking-tight text-primary-container pointer-events-none">Track</span>
-        <div className="ml-auto flex items-center gap-3">
-          {user?.user_metadata?.avatar_url && (
-            <img src={user.user_metadata.avatar_url} alt="" className="w-7 h-7 rounded-full border border-outline-variant" />
-          )}
-          <span className="text-xs text-on-surface-variant hidden md:block">
-            {user?.user_metadata?.full_name ?? user?.email}
-          </span>
-          <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="w-8 h-8 rounded-lg glass-l1 border border-outline-variant/40 flex items-center justify-center text-outline hover:text-primary-container hover:border-primary-container/40 transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              {theme === 'dark' ? 'light_mode' : 'dark_mode'}
-            </span>
-          </button>
-          <button onClick={signOut} className="font-display font-bold uppercase tracking-widest text-[11px] text-outline hover:text-error transition-colors">
-            Sign out
-          </button>
-        </div>
-      </header>
-
-      <main className="relative z-10 px-6 md:px-10 py-5 max-w-screen-2xl mx-auto flex flex-col gap-4">
+    <main className="px-6 md:px-10 py-5 max-w-screen-2xl mx-auto flex flex-col gap-4">
 
         {/* ── Row 1: Filter bar + sync ── */}
         <div className="flex flex-wrap items-center gap-2">
@@ -286,7 +271,17 @@ export default function Dashboard() {
             )}
           </div>
 
-          {hasFilter && (
+          {/* Referred filter */}
+          <button
+            onClick={() => setReferredOnly(r => !r)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-display font-bold uppercase tracking-widest text-[10px] border transition-all ${referredOnly ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30' : 'text-on-surface-variant border-outline-variant/40 hover:bg-white/5'}`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>volunteer_activism</span>
+            Referred
+          </button>
+
+
+{hasFilter && (
             <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-outline hover:text-on-surface font-sans transition-colors">
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>filter_list_off</span>Clear
             </button>
@@ -294,13 +289,18 @@ export default function Dashboard() {
 
           {/* Sync icon — pushed to right */}
           <div className="ml-auto flex items-center gap-2">
-            {selectedIds.size > 0 && (
+            {editMode && selectedIds.size > 0 && (
               <button onClick={handleDeleteSelected}
                 className="font-display font-bold uppercase tracking-widest text-[10px] text-error border border-error/30 px-3 py-1.5 rounded-lg hover:bg-error/10 transition-all flex items-center gap-1.5">
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
                 Delete {selectedIds.size}
               </button>
             )}
+            <button onClick={() => { setEditMode(e => !e); setSelectedIds(new Set()) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-display font-bold uppercase tracking-widest text-[10px] border transition-all active:scale-95 ${editMode ? 'bg-primary-container/20 text-primary-container border-primary-container/30' : 'glass-l1 border-outline-variant/40 text-on-surface-variant hover:border-primary-container/40'}`}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{editMode ? 'check' : 'edit'}</span>
+              {editMode ? 'Done' : 'Edit'}
+            </button>
             <button onClick={handleSync} disabled={syncing} title="Sync emails"
               className="w-8 h-8 rounded-lg glass-l1 border border-outline-variant/40 flex items-center justify-center text-outline hover:text-primary-container hover:border-primary-container/40 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-wait">
               <span className={`material-symbols-outlined ${syncing ? 'animate-spin' : ''}`} style={{ fontSize: 16, animationDuration: '1s' }}>sync</span>
@@ -365,6 +365,7 @@ export default function Dashboard() {
                   selectedId={selectedCompany?.id}
                   onSelect={setSelected}
                   onSelectionChange={setSelectedIds}
+                  editMode={editMode}
                 />
               </div>
 
@@ -380,7 +381,6 @@ export default function Dashboard() {
             </div>
           </>
         )}
-      </main>
-    </div>
+    </main>
   )
 }

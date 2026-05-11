@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { updateApplication } from '../lib/api'
 import { Chip } from '../ui'
+import CompanyInterviewChart from './CompanyInterviewChart'
 
 const STAGE_COLOR = {
   'Applied':      'primary',
@@ -35,7 +36,9 @@ function formatFrom(from = '') {
 
 export default function CompanyPanel({ company, onClose, onUpdate }) {
   const [companySize, setCompanySize] = useState(company.company_size ?? '')
-  const [saving, setSaving] = useState(false)
+  const [referred, setReferred]       = useState(company.referred ?? false)
+  const [saving, setSaving]           = useState(false)
+  const [tab, setTab]                 = useState('details') // 'details' | 'timeline'
 
   const emails = Array.isArray(company.raw_emails) ? company.raw_emails : []
 
@@ -45,6 +48,13 @@ export default function CompanyPanel({ company, onClose, onUpdate }) {
     await updateApplication(company.id, { company_size: companySize })
     onUpdate({ ...company, company_size: companySize })
     setSaving(false)
+  }
+
+  async function handleToggleReferred() {
+    const next = !referred
+    setReferred(next)
+    await updateApplication(company.id, { referred: next })
+    onUpdate({ ...company, referred: next })
   }
 
   const details = [
@@ -86,13 +96,73 @@ export default function CompanyPanel({ company, onClose, onUpdate }) {
         </button>
       </div>
 
+      {/* Tab bar */}
+      <div className="flex border-b border-outline-variant/40 shrink-0 px-5">
+        {[
+          { key: 'details',  label: 'Details',  icon: 'info' },
+          { key: 'timeline', label: 'Timeline', icon: 'bar_chart' },
+        ].map(({ key, label, icon }) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 font-display font-bold uppercase tracking-widest text-[10px] border-b-2 transition-all -mb-px ${
+              tab === key
+                ? 'border-primary-container text-primary-container'
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
+            }`}>
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{icon}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
 
-        {/* Stage */}
-        <div className="flex items-center gap-2">
+        {tab === 'timeline' && (
+          <>
+            {/* Stage + Referred — always visible for context */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Chip color={STAGE_COLOR[company.stage] ?? 'outline'} icon="circle">
+                {company.stage}
+              </Chip>
+              <button
+                onClick={handleToggleReferred}
+                title={referred ? 'Remove referral flag' : 'Mark as referred'}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-display font-bold uppercase tracking-widest border transition-all ${
+                  referred
+                    ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30 hover:bg-emerald-400/25'
+                    : 'text-on-surface-variant border-outline-variant/40 hover:bg-white/5'
+                }`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+                  {referred ? 'volunteer_activism' : 'add'}
+                </span>
+                {referred ? 'Referred' : 'Referral'}
+              </button>
+            </div>
+            <CompanyInterviewChart company={company} />
+          </>
+        )}
+
+        {tab === 'details' && <>
+
+        {/* Stage + Referred */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Chip color={STAGE_COLOR[company.stage] ?? 'outline'} icon="circle">
             {company.stage}
           </Chip>
+          <button
+            onClick={handleToggleReferred}
+            title={referred ? 'Remove referral flag' : 'Mark as referred'}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-display font-bold uppercase tracking-widest border transition-all ${
+              referred
+                ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30 hover:bg-emerald-400/25'
+                : 'text-on-surface-variant border-outline-variant/40 hover:bg-white/5'
+            }`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+              {referred ? 'volunteer_activism' : 'add'}
+            </span>
+            {referred ? 'Referred' : 'Referral'}
+          </button>
           {company.last_synced_at && (
             <span className="text-[10px] text-outline font-display uppercase tracking-widest">
               synced {formatDate(company.last_synced_at)}
@@ -162,6 +232,8 @@ export default function CompanyPanel({ company, onClose, onUpdate }) {
             </div>
           )}
         </div>
+
+        </>}
       </div>
     </div>
   )

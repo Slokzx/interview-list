@@ -1,3 +1,5 @@
+import { makeGmailFetcher } from '../lib/gmailAuth.js'
+
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 // Two-arm query: broad subject keywords OR common recruiting sender patterns
 const JOB_QUERY = [
@@ -38,27 +40,15 @@ const ATS_DOMAINS = new Set([
   'hirevue.com', 'codility.com', 'hackerrank.com', 'codesignal.com',
 ])
 
+// Domains/patterns that should be dropped entirely — automated scheduling
+// services that proxy recruiter emails, not actual company senders.
+// These appear as "reply to recruiter@company.com" but From is the scheduler.
+const BLOCKED_SENDER_RE = /jobhire/i
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// Fetch with exponential backoff on 429
-async function gmailFetch(path, token, attempt = 0) {
-  const res = await fetch(`${GMAIL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (res.status === 429) {
-    if (attempt >= 5) throw new Error(`Gmail rate limit exceeded after ${attempt} retries`)
-    const delay = Math.min(1000 * 2 ** attempt, 30000) // 1s, 2s, 4s, 8s, 16s
-    await sleep(delay)
-    return gmailFetch(path, token, attempt + 1)
-  }
-
-  if (!res.ok) throw new Error(`Gmail API ${res.status} on ${path}`)
-  return res.json()
-}
-
 // Process IDs in small concurrent batches with a pause between each
-async function fetchMetadataBatch(ids, token, onProgress) {
+async function fetchMetadataBatch(ids, gmailFetch, onProgress) {
   const CONCURRENT = 10   // max parallel requests (10 × 5 units = 50/250 quota)
   const PAUSE_MS   = 200  // pause between batches to stay well under quota
 
@@ -68,8 +58,7 @@ async function fetchMetadataBatch(ids, token, onProgress) {
     const batchResults = await Promise.all(
       batch.map(({ id }) =>
         gmailFetch(
-          `/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
-          token
+          `/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`
         )
       )
     )
@@ -98,10 +87,11 @@ function extractDomain(from = '') {
   return match ? match[1].toLowerCase() : null
 }
 
-export async function fetchJobEmails(token, onProgress) {
-  // Resolve the user-defined 'companies' label to its stable ID
+export async function fetchJobEmails(token, onProgress, refreshToken) {
+  const { gmailFetch } = makeGmailFetcher(token, refreshToken)
+
   onProgress?.('Looking up "companies" label…')
-  const { labels = [] } = await gmailFetch('/labels', token)
+  const { labels = [] } = await gmailFetch('/labels')
   const companiesLabel = labels.find((l) => l.name.toLowerCase() === 'companies')
 
   if (!companiesLabel) {
@@ -110,7 +100,6 @@ export async function fetchJobEmails(token, onProgress) {
     )
   }
 
-  // Page through all messages carrying that label
   const allMessages = []
   let pageToken = null
 
@@ -119,7 +108,7 @@ export async function fetchJobEmails(token, onProgress) {
     params.append('labelIds', companiesLabel.id)
     if (pageToken) params.set('pageToken', pageToken)
 
-    const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`, token)
+    const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
     allMessages.push(...messages)
     pageToken = nextPageToken
     onProgress?.(`Found ${allMessages.length} emails in "companies" label…`)
@@ -130,7 +119,7 @@ export async function fetchJobEmails(token, onProgress) {
   }
 
   onProgress?.(`Fetching metadata for ${allMessages.length} emails…`)
-  const details = await fetchMetadataBatch(allMessages, token, onProgress)
+  const details = await fetchMetadataBatch(allMessages, gmailFetch, onProgress)
   return details.map(parseMessage)
 }
 
@@ -140,6 +129,8 @@ export function groupByDomain(emails) {
   for (const email of emails) {
     const domain = extractDomain(email.from)
     if (!domain) continue
+    // Drop scheduling proxies — they're not real company senders
+    if (BLOCKED_SENDER_RE.test(email.from)) continue
     if (!map.has(domain)) {
       map.set(domain, { domain, isAts: ATS_DOMAINS.has(domain), emails: [] })
     }
