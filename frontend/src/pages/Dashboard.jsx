@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [stageFilters, setStages]     = useState(new Set())
   const [sizeFilters, setSizeFilters] = useState(new Set())
   const [sizeOpen, setSizeOpen]       = useState(false)
+  const [stageOpen, setStageOpen]     = useState(false)
   const [referredOnly, setReferredOnly]   = useState(false)
   const [viaProxyOnly, setViaProxyOnly]   = useState(false)
   const [dateFrom, setDateFrom]       = useState('')
@@ -81,7 +82,7 @@ export default function Dashboard() {
 
   const hasFilter = search || stageFilters.size > 0 || sizeFilters.size > 0 || referredOnly || viaProxyOnly || dateFrom || dateTo
 
-  function clearFilters() { setSearch(''); setStages(new Set()); setSizeFilters(new Set()); setReferredOnly(false); setViaProxyOnly(false); setDateFrom(''); setDateTo('') }
+  function clearFilters() { setSearch(''); setStages(new Set()); setSizeFilters(new Set()); setReferredOnly(false); setViaProxyOnly(false); setDateFrom(''); setDateTo(''); setStageOpen(false); setSizeOpen(false) }
 
   function toggleSize(tier) {
     setSizeFilters((prev) => { const n = new Set(prev); n.has(tier) ? n.delete(tier) : n.add(tier); return n })
@@ -191,8 +192,8 @@ export default function Dashboard() {
   return (
     <main className="px-6 md:px-10 py-5 max-w-screen-2xl mx-auto flex flex-col gap-4">
 
-        {/* ── Row 1: Filter bar + sync ── */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* ── Row 1: Filter bar + actions (single line) ── */}
+        <div className="flex items-center gap-2 flex-wrap">
 
           {/* Search */}
           <div className="relative">
@@ -208,32 +209,42 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Stage pills */}
-          <button
-            onClick={() => setStages(new Set())}
-            className={`px-3 py-1.5 rounded-lg font-display font-bold uppercase tracking-widest text-[10px] border transition-all ${stageFilters.size === 0 ? 'bg-primary-container/20 text-primary-container border-primary-container/30' : 'text-on-surface-variant border-outline-variant/40 hover:bg-white/5'}`}
-          >All</button>
-          {STAGES.map((s) => (
+          {/* Stage dropdown */}
+          <div className="relative">
             <button
-              key={s}
-              onClick={() => setStages((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n })}
-              className={`px-3 py-1.5 rounded-lg font-display font-bold uppercase tracking-widest text-[10px] border transition-all ${stageFilters.has(s) ? 'bg-primary-container/20 text-primary-container border-primary-container/30' : 'text-on-surface-variant border-outline-variant/40 hover:bg-white/5'}`}
-            >{s}</button>
-          ))}
-
-          {/* Date range */}
-          <div className="flex items-center gap-1">
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg transition-all w-32 [color-scheme:dark]" />
-            <span className="text-outline text-xs">→</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg transition-all w-32 [color-scheme:dark]" />
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(''); setDateTo('') }} className="material-symbols-outlined text-outline hover:text-on-surface" style={{ fontSize: 14 }}>close</button>
+              onClick={() => setStageOpen((o) => !o)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-display font-bold uppercase tracking-widest text-[10px] border transition-all ${stageFilters.size > 0 ? 'bg-primary-container/20 text-primary-container border-primary-container/30' : 'text-on-surface-variant border-outline-variant/40 hover:bg-white/5'}`}
+            >
+              Stage {stageFilters.size > 0 && `(${stageFilters.size})`}
+              <span className="material-symbols-outlined" style={{ fontSize: 12, transition: 'transform 0.15s', transform: stageOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
+            </button>
+            {stageOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setStageOpen(false)} />
+                <div className="absolute top-full mt-1 left-0 z-20 glass-l1 rounded-xl py-1.5 min-w-[150px] shadow-lg">
+                  {STAGES.map((s) => (
+                    <label key={s} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-primary-container/10 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={stageFilters.has(s)}
+                        onChange={() => setStages((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n })}
+                        className="w-3.5 h-3.5 rounded accent-cyan-400 cursor-pointer"
+                      />
+                      <span className="font-sans text-xs text-on-surface">{s}</span>
+                    </label>
+                  ))}
+                  {stageFilters.size > 0 && (
+                    <button
+                      onClick={() => { setStages(new Set()); setStageOpen(false) }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-outline hover:text-error font-sans border-t border-outline-variant/30 mt-1 pt-1.5 transition-colors"
+                    >Clear</button>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
-          {/* Size filter dropdown */}
+          {/* Size dropdown */}
           <div className="relative">
             <button
               onClick={() => setSizeOpen((o) => !o)}
@@ -242,7 +253,6 @@ export default function Dashboard() {
               Size {sizeFilters.size > 0 && `(${sizeFilters.size})`}
               <span className="material-symbols-outlined" style={{ fontSize: 12, transition: 'transform 0.15s', transform: sizeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
             </button>
-
             {sizeOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setSizeOpen(false)} />
@@ -262,12 +272,22 @@ export default function Dashboard() {
                     <button
                       onClick={() => { setSizeFilters(new Set()); setSizeOpen(false) }}
                       className="w-full text-left px-3 py-1.5 text-xs text-outline hover:text-error font-sans border-t border-outline-variant/30 mt-1 pt-1.5 transition-colors"
-                    >
-                      Clear
-                    </button>
+                    >Clear</button>
                   )}
                 </div>
               </>
+            )}
+          </div>
+
+          {/* Date range */}
+          <div className="flex items-center gap-1">
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg transition-all w-32 [color-scheme:dark]" />
+            <span className="text-outline text-xs">→</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg transition-all w-32 [color-scheme:dark]" />
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(''); setDateTo('') }} className="material-symbols-outlined text-outline hover:text-on-surface" style={{ fontSize: 14 }}>close</button>
             )}
           </div>
 
@@ -280,15 +300,14 @@ export default function Dashboard() {
             Referred
           </button>
 
-
-{hasFilter && (
+          {hasFilter && (
             <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-outline hover:text-on-surface font-sans transition-colors">
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>filter_list_off</span>Clear
             </button>
           )}
 
-          {/* Sync icon — pushed to right */}
-          <div className="ml-auto flex items-center gap-2">
+          {/* Actions — pushed to right, stay on same line */}
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             {editMode && selectedIds.size > 0 && (
               <button onClick={handleDeleteSelected}
                 className="font-display font-bold uppercase tracking-widest text-[10px] text-error border border-error/30 px-3 py-1.5 rounded-lg hover:bg-error/10 transition-all flex items-center gap-1.5">
@@ -302,8 +321,9 @@ export default function Dashboard() {
               {editMode ? 'Done' : 'Edit'}
             </button>
             <button onClick={handleSync} disabled={syncing} title="Sync emails"
-              className="w-8 h-8 rounded-lg glass-l1 border border-outline-variant/40 flex items-center justify-center text-outline hover:text-primary-container hover:border-primary-container/40 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-wait">
-              <span className={`material-symbols-outlined ${syncing ? 'animate-spin' : ''}`} style={{ fontSize: 16, animationDuration: '1s' }}>sync</span>
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass-l1 border border-outline-variant/40 text-outline hover:text-primary-container hover:border-primary-container/40 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-wait font-display font-bold uppercase tracking-widest text-[10px]">
+              <span className={`material-symbols-outlined ${syncing ? 'animate-spin' : ''}`} style={{ fontSize: 14, animationDuration: '1s' }}>sync</span>
+              {syncing ? 'Syncing…' : 'Sync'}
             </button>
           </div>
         </div>
