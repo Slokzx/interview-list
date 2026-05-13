@@ -151,6 +151,7 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
     },
     body: JSON.stringify({ message, history, userId, gmailToken }),
   })
+  if (res.status === 429) throw new Error('Too many messages — wait a moment and try again.')
   if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
 
   const reader = res.body.getReader()

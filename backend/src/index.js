@@ -44,9 +44,18 @@ app.use(morgan(isProd ? 'combined' : 'dev'))
 app.use(express.json({ limit: '1mb' }))
 
 // ── Rate limiting ─────────────────────────────────────────────
-// Tight limit for expensive AI/sync endpoints
+// Chat: conversational — allow up to 30 messages per minute per user
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many messages — wait a moment and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Sync/enrich: expensive one-shot operations — keep tight
 const syncLimiter = rateLimit({
-  windowMs: 60 * 1000,   // 1 minute
+  windowMs: 60 * 1000,
   max: 5,
   message: { error: 'Too many sync requests — wait a minute and try again.' },
   standardHeaders: true,
@@ -65,7 +74,7 @@ app.use('/api', apiLimiter)
 app.use('/api/sync', syncLimiter)
 app.use('/api/sync-receipts', syncLimiter)
 app.use('/api/enrich', syncLimiter)
-app.use('/api/chat', syncLimiter)
+app.use('/api/chat', chatLimiter)
 
 // ── Routes ────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({
