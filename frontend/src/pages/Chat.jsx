@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { sendChatMessage } from '../lib/api'
 import { useCustomTables } from '../contexts/CustomTablesContext'
@@ -80,10 +80,45 @@ function renderContent(text) {
   return blocks
 }
 
+// ── Quick-reply suggestion chips ─────────────────────────────────────────────
+// Shown after Phase 1/2 responses so users can answer clarifying questions fast.
+
+const DATE_CHIPS = [
+  { label: 'All time',       value: 'All time — show everything' },
+  { label: 'Last 2 years',   value: 'Last 2 years (2024–2025)' },
+  { label: '2024',           value: '2024 only' },
+  { label: '2023',           value: '2023 only' },
+  { label: 'Last 6 months',  value: 'Last 6 months' },
+]
+const CONFIRM_CHIP = { label: '✓ Finalize & create table', value: 'That looks good — please finalize and create the table.' }
+
+function SuggestedReplies({ onSelect }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {DATE_CHIPS.map(c => (
+        <button
+          key={c.label}
+          onClick={() => onSelect(c.value)}
+          className="px-3 py-1.5 rounded-full border border-outline-variant/30 bg-surface-container-highest/20 text-[11px] font-sans text-on-surface-variant hover:bg-primary-container/10 hover:border-primary-container/30 hover:text-on-surface transition-all"
+        >
+          {c.label}
+        </button>
+      ))}
+      <button
+        onClick={() => onSelect(CONFIRM_CHIP.value)}
+        className="px-3 py-1.5 rounded-full border border-primary-container/40 bg-primary-container/10 text-[11px] font-sans text-primary-container font-semibold hover:bg-primary-container/20 transition-all"
+      >
+        {CONFIRM_CHIP.label}
+      </button>
+    </div>
+  )
+}
+
 // ── Create Research Table CTA ─────────────────────────────────────────────────
 // Only shown after Claude emits [TABLE_READY] — i.e. after user has confirmed all details.
 
 function CreateTableCTA({ content, sourceQuery, emailPayload, onSaved }) {
+  const navigate  = useNavigate()
   const [open,    setOpen]    = useState(false)
   const [name,    setName]    = useState('')
   const [saving,  setSaving]  = useState(false)
@@ -161,6 +196,8 @@ function CreateTableCTA({ content, sourceQuery, emailPayload, onSaved }) {
       if (error) throw error
       setSavedId(data.id)
       onSaved()
+      // Auto-navigate to the new table
+      setTimeout(() => navigate(`/research/${data.id}`), 800)
     } catch (err) {
       console.error(err)
     } finally {
@@ -240,7 +277,7 @@ function UserBubble({ content }) {
   )
 }
 
-function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved }) {
+function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved, onQuickReply, isLast }) {
   return (
     <div className="flex gap-3 items-start">
       <div className="w-7 h-7 rounded-lg bg-primary-container/20 border border-primary-container/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -251,7 +288,8 @@ function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved }) {
           ? (
             <>
               {renderContent(msg.content)}
-              {/* Only shown once Claude emits [TABLE_READY] and streaming is complete */}
+
+              {/* TABLE_READY: show create CTA */}
               {!streaming && msg.tableReady && (
                 <CreateTableCTA
                   content={msg.content}
@@ -259,6 +297,11 @@ function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved }) {
                   emailPayload={msg.emailPayload ?? null}
                   onSaved={onTableSaved}
                 />
+              )}
+
+              {/* Phase 1/2: show quick-reply chips on the last assistant message */}
+              {!streaming && !msg.tableReady && isLast && (
+                <SuggestedReplies onSelect={onQuickReply} />
               )}
             </>
           )
@@ -414,6 +457,8 @@ export default function Chat() {
                   streaming={loading && i === messages.length - 1 && !msg.content}
                   sourceQuery={getSourceQuery(i)}
                   onTableSaved={refetchTables}
+                  onQuickReply={send}
+                  isLast={i === messages.length - 1}
                 />
           )}
           {error && (

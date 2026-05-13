@@ -227,10 +227,12 @@ router.post('/', async (req, res) => {
 
     const gmailQuery = gmailToken ? buildGmailQuery(message) : null
 
-    // ── Phase 1: parallel — DB fetch + Gmail ID search ──────────────────────
+    // ── Phase 1: parallel — DB fetch + fast Gmail preview (50 IDs = 1 API page) ──
+    // We only fetch 50 emails for Claude's context. Full 500-email fetch only
+    // happens AFTER [TABLE_READY] is detected, so Phase 1/2 turns are fast.
     const [
       [{ data: applications }, { data: receipts }],
-      allMessageIds,
+      previewIds,
     ] = await Promise.all([
       Promise.all([
         supabase.from('applications')
@@ -242,21 +244,13 @@ router.post('/', async (req, res) => {
           .not('company', 'is', null)
           .neq('company', '__none__'),
       ]),
-      gmailToken ? searchGmailIds(gmailToken, gmailQuery, 500) : Promise.resolve([]),
+      gmailToken ? searchGmailIds(gmailToken, gmailQuery, 50) : Promise.resolve([]),
     ])
 
-    // ── Phase 2: fetch metadata for first 30 emails (fast — for Claude context) ─
-    const previewIds    = allMessageIds.slice(0, 30)
-    const remainingIds  = allMessageIds.slice(30)
-
+    // ── Phase 2: fetch email metadata in parallel (all 50, no background work) ─
     const previewEmails = previewIds.length > 0
       ? (await Promise.all(previewIds.map(m => fetchEmailMeta(gmailToken, m.id)))).filter(Boolean)
       : []
-
-    // Start fetching remaining emails in background (runs while Claude streams)
-    const remainingPromise = remainingIds.length > 0
-      ? fetchEmailMetaBatch(gmailToken, remainingIds, 20)
-      : Promise.resolve([])
 
     // ── Phase 3: build context and stream Claude response ───────────────────
     const context = buildContext(applications, receipts, previewEmails, gmailQuery)
@@ -282,22 +276,26 @@ ${context}`
       stream:     true,
     })
 
+    // Buffer full text so we can detect [TABLE_READY] after streaming
+    let fullText = ''
     for await (const chunk of stream) {
       if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+        fullText += chunk.delta.text
         send({ type: 'delta', text: chunk.delta.text })
       }
     }
 
-    // ── Phase 4: send full email dataset (background fetch should be done by now) ─
-    if (allMessageIds.length > 0 && gmailToken) {
-      const remainingEmails = await remainingPromise
-      const allEmails       = [...previewEmails, ...remainingEmails]
+    // ── Phase 4: only fetch full dataset when Claude finalised the table ────
+    // This keeps Phase 1/2 turns instant — no email fetching after streaming.
+    if (fullText.includes('[TABLE_READY]') && gmailToken) {
+      const allIds   = await searchGmailIds(gmailToken, gmailQuery, 500)
+      const allEmails = await fetchEmailMetaBatch(gmailToken, allIds, 20)
 
       send({
         type:    'emails',
         data:    allEmails,
         query:   gmailQuery,
-        total:   allMessageIds.length,   // total IDs found (may be > allEmails.length)
+        total:   allIds.length,
         columns: GMAIL_TABLE_COLUMNS,
         rows:    emailsToRows(allEmails),
       })
