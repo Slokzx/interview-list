@@ -99,15 +99,10 @@ function gmailDateStr(date) {
 export async function fetchJobEmails(token, onProgress, refreshToken, afterDate = null) {
   const { gmailFetch } = makeGmailFetcher(token, refreshToken)
 
+  // Try label first (faster, more targeted). Fall back to keyword search if not found.
   onProgress?.('Looking up "companies" label…')
   const { labels = [] } = await gmailFetch('/labels')
   const companiesLabel = labels.find((l) => l.name.toLowerCase() === 'companies')
-
-  if (!companiesLabel) {
-    throw new Error(
-      'Gmail label "companies" not found. Create that label in Gmail, apply it to your job emails, then sync again.'
-    )
-  }
 
   if (afterDate) {
     onProgress?.(`Incremental sync — fetching emails after ${gmailDateStr(afterDate)}…`)
@@ -116,21 +111,35 @@ export async function fetchJobEmails(token, onProgress, refreshToken, afterDate 
   const allMessages = []
   let pageToken = null
 
-  do {
-    const params = new URLSearchParams({ maxResults: 500 })
-    params.append('labelIds', companiesLabel.id)
-    // Server-side date filter: only ask Gmail for emails newer than afterDate
-    if (afterDate) params.set('q', `after:${gmailDateStr(afterDate)}`)
-    if (pageToken) params.set('pageToken', pageToken)
-
-    const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
-    allMessages.push(...messages)
-    pageToken = nextPageToken
-    onProgress?.(`Found ${allMessages.length} emails in "companies" label…`)
-  } while (pageToken)
+  if (companiesLabel) {
+    // ── Label mode (opt-in, precise) ─────────────────────────────────────
+    do {
+      const params = new URLSearchParams({ maxResults: 500 })
+      params.append('labelIds', companiesLabel.id)
+      if (afterDate) params.set('q', `after:${gmailDateStr(afterDate)}`)
+      if (pageToken) params.set('pageToken', pageToken)
+      const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
+      allMessages.push(...messages)
+      pageToken = nextPageToken
+      onProgress?.(`Found ${allMessages.length} emails in "companies" label…`)
+    } while (pageToken)
+  } else {
+    // ── Keyword search mode (no label required) ───────────────────────────
+    onProgress?.('No "companies" label found — scanning all mail with job-related keywords…')
+    const dateFilter = afterDate ? ` after:${gmailDateStr(afterDate)}` : ''
+    const q = JOB_QUERY + dateFilter
+    do {
+      const params = new URLSearchParams({ maxResults: 500, q })
+      if (pageToken) params.set('pageToken', pageToken)
+      const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
+      allMessages.push(...messages)
+      pageToken = nextPageToken
+      onProgress?.(`Found ${allMessages.length} matching emails…`)
+    } while (pageToken)
+  }
 
   if (allMessages.length === 0) {
-    throw new Error('No emails found in the "companies" label.')
+    throw new Error('No job-related emails found. Try applying a "companies" label in Gmail to help narrow results.')
   }
 
   onProgress?.(`Fetching metadata for ${allMessages.length} emails…`)

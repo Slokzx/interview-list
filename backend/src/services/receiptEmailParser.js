@@ -85,13 +85,10 @@ function gmailDateStr(date) {
 export async function fetchAndParseReceiptEmails(token, existingMessageIds = new Set(), onProgress, onBatch, refreshToken, afterDate = null) {
   const { gmailFetch } = makeGmailFetcher(token, refreshToken)
 
+  // Try label first. Fall back to a broad receipt keyword search if not found.
   onProgress?.('Looking up "Receipts" label…')
   const { labels = [] } = await gmailFetch('/labels')
   const receiptsLabel = labels.find(l => l.name.toLowerCase() === 'receipts')
-
-  if (!receiptsLabel) {
-    throw new Error('Gmail label "Receipts" not found. Create that label in Gmail, apply it to your receipt emails, then sync again.')
-  }
 
   if (afterDate) {
     onProgress?.(`Incremental sync — fetching receipts after ${gmailDateStr(afterDate)}…`)
@@ -99,18 +96,35 @@ export async function fetchAndParseReceiptEmails(token, existingMessageIds = new
 
   const allMessages = []
   let pageToken = null
-  do {
-    const params = new URLSearchParams({ maxResults: 500 })
-    params.append('labelIds', receiptsLabel.id)
-    if (afterDate) params.set('q', `after:${gmailDateStr(afterDate)}`)
-    if (pageToken) params.set('pageToken', pageToken)
-    const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
-    allMessages.push(...messages)
-    pageToken = nextPageToken
-    onProgress?.(`Found ${allMessages.length} emails in "Receipts" label…`)
-  } while (pageToken)
 
-  if (allMessages.length === 0) throw new Error('No emails found in the "Receipts" label.')
+  if (receiptsLabel) {
+    // ── Label mode ────────────────────────────────────────────────────────
+    do {
+      const params = new URLSearchParams({ maxResults: 500 })
+      params.append('labelIds', receiptsLabel.id)
+      if (afterDate) params.set('q', `after:${gmailDateStr(afterDate)}`)
+      if (pageToken) params.set('pageToken', pageToken)
+      const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
+      allMessages.push(...messages)
+      pageToken = nextPageToken
+      onProgress?.(`Found ${allMessages.length} emails in "Receipts" label…`)
+    } while (pageToken)
+  } else {
+    // ── Keyword search mode (no label required) ───────────────────────────
+    onProgress?.('No "Receipts" label found — scanning all mail for receipts and invoices…')
+    const dateFilter = afterDate ? ` after:${gmailDateStr(afterDate)}` : ''
+    const q = `(subject:(receipt OR invoice OR order OR payment OR purchase OR "order confirmation" OR "payment confirmation" OR "your receipt" OR "billing statement") OR from:(receipts OR billing OR invoice OR noreply OR orders OR payments OR donotreply))${dateFilter}`
+    do {
+      const params = new URLSearchParams({ maxResults: 500, q })
+      if (pageToken) params.set('pageToken', pageToken)
+      const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
+      allMessages.push(...messages)
+      pageToken = nextPageToken
+      onProgress?.(`Found ${allMessages.length} matching emails…`)
+    } while (pageToken)
+  }
+
+  if (allMessages.length === 0) throw new Error('No receipt-related emails found.')
 
   const newMessages = allMessages.filter(m => !existingMessageIds.has(m.id))
   if (newMessages.length === 0) return 0

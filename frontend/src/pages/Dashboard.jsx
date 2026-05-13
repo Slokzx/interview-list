@@ -336,13 +336,18 @@ export default function Dashboard() {
         ) : (
           <>
             {/* ── Row 2: Summary ── */}
-            <p className="text-sm text-on-surface-variant font-sans">
-              <span className="text-on-surface font-semibold">{filtered.length}</span>
-              {filtered.length !== companies.length && <span className="text-outline"> of {companies.length}</span>}
-              {' '}companies &nbsp;·&nbsp;
-              <span className="text-on-surface font-semibold">{totalEmails.toLocaleString()}</span> emails read &nbsp;·&nbsp;
-              <span className="text-on-surface font-semibold">{totalInterviews.toLocaleString()}</span> interviews
-            </p>
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm text-on-surface-variant font-sans">
+                <span className="text-on-surface font-semibold">{filtered.length}</span>
+                {filtered.length !== companies.length && <span className="text-outline"> of {companies.length}</span>}
+                {' '}companies &nbsp;·&nbsp;
+                <span className="text-on-surface font-semibold">{totalEmails.toLocaleString()}</span> emails read &nbsp;·&nbsp;
+                <span className="text-on-surface font-semibold">{totalInterviews.toLocaleString()}</span> interviews
+              </p>
+              <p className="text-[11px] text-outline font-sans">
+                Your Gmail is scanned for job-related emails — grouped by company, with stage, role, and recruiter extracted automatically by AI.
+              </p>
+            </div>
 
             {/* Status bars */}
             {syncStatus && (
@@ -359,6 +364,42 @@ export default function Dashboard() {
                 {enrichStatus.type === 'error' && <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>}
                 {enrichStatus.type === 'done'  && <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>check_circle</span>}
                 {enrichStatus.message}
+              </div>
+            )}
+
+            {/* ── Empty state info card ── */}
+            {companies.length === 0 && !syncing && (
+              <div className="rounded-xl border border-outline-variant/30 bg-surface-container-highest/10 p-6 flex flex-col gap-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary-container/15 border border-primary-container/20 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 20 }}>work_outline</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-on-surface mb-1">Track every job application automatically</p>
+                    <p className="text-xs text-on-surface-variant font-sans leading-relaxed">
+                      Connect your Gmail inbox and let AI do the heavy lifting — emails are grouped by company, and the stage, role, recruiter, and interview count are extracted for you.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { icon: 'mail', step: '1', title: 'Connect your Gmail', body: 'Sign in with Google — the app gets read-only access to scan your inbox for job-related emails.' },
+                    { icon: 'auto_awesome', step: '2', title: 'AI does the work', body: 'Emails are grouped by company domain. Stage, role, recruiter name, and interview count are extracted automatically.' },
+                    { icon: 'sync', step: '3', title: 'Hit Sync', body: 'Click Sync above to start. Re-sync anytime — only new emails are processed.' },
+                  ].map(({ icon, step, title, body }) => (
+                    <div key={step} className="flex gap-3 p-3.5 rounded-lg bg-surface-container-highest/20 border border-outline-variant/20">
+                      <div className="w-7 h-7 rounded-lg bg-primary-container/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 15 }}>{icon}</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-display font-bold uppercase tracking-widest text-outline mb-0.5">Step {step}</p>
+                        <p className="text-xs font-semibold text-on-surface mb-0.5">{title}</p>
+                        <p className="text-[11px] text-on-surface-variant font-sans leading-relaxed">{body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

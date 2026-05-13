@@ -267,14 +267,19 @@ export default function Receipts() {
 
       {/* Summary + sync status */}
       {!loading && (
-        <p className="text-sm text-on-surface-variant font-sans">
-          <span className="text-on-surface font-semibold">{groups.length}</span> {groups.length === 1 ? 'company' : 'companies'} &nbsp;·&nbsp;
-          <span className="text-on-surface font-semibold">{filtered.length}</span> receipt{filtered.length !== 1 ? 's' : ''}
-          {totalSpend > 0 && <> &nbsp;·&nbsp; <span className="text-on-surface font-semibold">{formatAmount(totalSpend)}</span> total</>}
-          {emailsScanned > filtered.length && (
-            <span className="text-outline"> &nbsp;·&nbsp; {emailsScanned.toLocaleString()} emails scanned</span>
-          )}
-        </p>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-sm text-on-surface-variant font-sans">
+            <span className="text-on-surface font-semibold">{groups.length}</span> {groups.length === 1 ? 'company' : 'companies'} &nbsp;·&nbsp;
+            <span className="text-on-surface font-semibold">{filtered.length}</span> receipt{filtered.length !== 1 ? 's' : ''}
+            {totalSpend > 0 && <> &nbsp;·&nbsp; <span className="text-on-surface font-semibold">{formatAmount(totalSpend)}</span> total</>}
+            {emailsScanned > filtered.length && (
+              <span className="text-outline"> &nbsp;·&nbsp; {emailsScanned.toLocaleString()} emails scanned</span>
+            )}
+          </p>
+          <p className="text-[11px] text-outline font-sans">
+            Your Gmail is scanned for receipts and invoices — amounts, dates, and categories extracted by AI and grouped by merchant.
+          </p>
+        </div>
       )}
 
       {syncStatus && (
@@ -283,6 +288,42 @@ export default function Receipts() {
           {syncStatus.type === 'error' && <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>}
           {syncStatus.type === 'done'  && <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>check_circle</span>}
           {syncStatus.message}
+        </div>
+      )}
+
+      {/* Empty state info card */}
+      {!loading && receipts.length === 0 && !syncing && (
+        <div className="rounded-xl border border-outline-variant/30 bg-surface-container-highest/10 p-6 flex flex-col gap-5">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary-container/15 border border-primary-container/20 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 20 }}>receipt_long</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-on-surface mb-1">Automatically track your spending from Gmail</p>
+              <p className="text-xs text-on-surface-variant font-sans leading-relaxed">
+                Receipts, invoices, and purchase confirmations are pulled from your inbox, parsed by AI, and grouped by merchant — so you always know where your money went.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { icon: 'mail', step: '1', title: 'Connect your Gmail', body: 'Sign in with Google — the app gets read-only access to scan your inbox for receipts and invoices.' },
+              { icon: 'auto_awesome', step: '2', title: 'AI does the work', body: 'Purchase amounts, dates, and categories are extracted automatically and grouped by merchant.' },
+              { icon: 'sync', step: '3', title: 'Hit Sync', body: 'Click Sync above to start. Re-sync anytime — only new emails since the last run are processed.' },
+            ].map(({ icon, step, title, body }) => (
+              <div key={step} className="flex gap-3 p-3.5 rounded-lg bg-surface-container-highest/20 border border-outline-variant/20">
+                <div className="w-7 h-7 rounded-lg bg-primary-container/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 15 }}>{icon}</span>
+                </div>
+                <div>
+                  <p className="text-[10px] font-display font-bold uppercase tracking-widest text-outline mb-0.5">Step {step}</p>
+                  <p className="text-xs font-semibold text-on-surface mb-0.5">{title}</p>
+                  <p className="text-[11px] text-on-surface-variant font-sans leading-relaxed">{body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
