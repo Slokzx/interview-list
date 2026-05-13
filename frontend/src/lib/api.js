@@ -173,6 +173,39 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
   }
 }
 
+/** Stream email batches into a table — used by ResearchTable auto-sync after creation */
+export async function gmailStream({ query, gmailToken, tableId, userId, accessToken, existingIds = [], onTotal, onBatch, onDone }) {
+  const res = await fetch(`${BASE}/gmail-stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ query, gmailToken, tableId, userId, existingIds }),
+  })
+  if (!res.ok) throw new Error(`Gmail stream failed: ${res.status}`)
+
+  const reader  = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop()
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const event = JSON.parse(line.slice(6))
+      if (event.type === 'total') onTotal?.(event.count)
+      if (event.type === 'batch') onBatch?.(event)
+      if (event.type === 'done')  onDone?.(event.total)
+      if (event.type === 'error') throw new Error(event.message)
+    }
+  }
+}
+
 /** Re-run a Gmail search — used by Research Table "Sync" button */
 export async function gmailSearch({ query, gmailToken, accessToken, maxResults = 200 }) {
   const res = await fetch(`${BASE}/gmail-search`, {

@@ -186,7 +186,8 @@ function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
         if (error) throw error
         setStatus('done')
         onSaved()
-        navigate(`/research/${data.id}`)
+        // autoSync tells ResearchTable to fetch remaining emails progressively
+        navigate(`/research/${data.id}`, { state: { autoSync: true } })
       } catch (err) {
         console.error(err)
         setErrMsg(err.message)

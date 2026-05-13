@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { gmailSearch } from '../lib/api'
+import { gmailSearch, gmailStream } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import { useCustomTables } from '../contexts/CustomTablesContext'
 
@@ -140,10 +140,12 @@ function EditModal({ row, rowIndex, cols, onSave, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ResearchTable() {
-  const { tableId } = useParams()
-  const { user }    = useAuth()
-  const navigate    = useNavigate()
+  const { tableId }  = useParams()
+  const { user }     = useAuth()
+  const navigate     = useNavigate()
+  const { state: navState } = useLocation()
   const { refetch: refetchSidebar } = useCustomTables()
+  const autoSyncRan  = useRef(false)
 
   const [table,     setTable]     = useState(null)
   const [loading,   setLoading]   = useState(true)
@@ -157,6 +159,8 @@ export default function ResearchTable() {
   const [deleting,  setDeleting]  = useState(false)
   const [viewRow,   setViewRow]   = useState(null)   // row object for detail modal
   const [editRow,   setEditRow]   = useState(null)   // { row, index }
+  // Progressive loading progress: { fetched, total, running }
+  const [streamProgress, setStreamProgress] = useState(null)
 
   // Load table from Supabase
   useEffect(() => {
@@ -175,6 +179,52 @@ export default function ResearchTable() {
         setLoading(false)
       })
   }, [tableId, user, navigate])
+
+  // Auto-sync: when navigated here from Chat after table creation, progressively
+  // fetch remaining emails and append them to the table row-by-row.
+  useEffect(() => {
+    if (!navState?.autoSync || !table || !table.gmail_query) return
+    if (autoSyncRan.current) return
+    autoSyncRan.current = true
+
+    async function runStream() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.provider_token) return
+
+        const existingIds = (table.rows ?? []).map(r => r._gmailId).filter(Boolean)
+        setStreamProgress({ fetched: 0, total: null, running: true })
+
+        await gmailStream({
+          query:       table.gmail_query,
+          gmailToken:  session.provider_token,
+          accessToken: session.access_token,
+          tableId:     table.id,
+          userId:      session.user.id,
+          existingIds,
+          onTotal: (count) => setStreamProgress(p => ({ ...p, total: count })),
+          onBatch: ({ rows: newRows, fetched, total }) => {
+            // Append new rows to local state immediately
+            setTable(prev => {
+              if (!prev) return prev
+              const seenIds = new Set((prev.rows ?? []).map(r => r._gmailId).filter(Boolean))
+              const dedupedNew = newRows.filter(r => !seenIds.has(r._gmailId))
+              return { ...prev, rows: [...(prev.rows ?? []), ...dedupedNew] }
+            })
+            setStreamProgress({ fetched, total, running: true })
+          },
+          onDone: (total) => {
+            setStreamProgress({ fetched: total, total, running: false })
+          },
+        })
+      } catch {
+        setStreamProgress(null)
+      }
+    }
+
+    runStream()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table?.id, navState?.autoSync])
 
   const cols    = useMemo(() => (table?.columns ?? []).filter(isVisible), [table])
   const allRows = useMemo(() => table?.rows ?? [], [table])
@@ -346,9 +396,13 @@ export default function ResearchTable() {
           )}
 
           {/* Row count */}
-          <p className="text-xs text-outline/60 font-sans">
+          <p className="text-xs text-outline/60 font-sans flex items-center gap-1.5">
             <span className="text-on-surface font-semibold">{rows.length}</span>
-            {rows.length !== allRows.length && <span> of {allRows.length}</span>} rows
+            {rows.length !== allRows.length && <span> of {allRows.length}</span>}
+            <span>rows</span>
+            {streamProgress?.running && (
+              <span className="text-primary-container animate-pulse">· loading more…</span>
+            )}
           </p>
 
           {/* Right-side actions */}
@@ -378,6 +432,32 @@ export default function ResearchTable() {
             </button>
           </div>
         </div>
+
+        {/* Progressive email fetch progress bar */}
+        {streamProgress && (
+          <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded-xl glass-l1 border border-outline-variant/30">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-xs text-on-surface-variant font-sans">
+                {streamProgress.running
+                  ? <><span className="w-2 h-2 rounded-full bg-primary-container animate-pulse shrink-0" /> Fetching emails…</>
+                  : <><span className="material-symbols-outlined text-emerald-400 shrink-0" style={{ fontSize: 14 }}>check_circle</span> All emails loaded</>
+                }
+              </span>
+              <span className="text-[11px] text-outline/60 font-sans tabular-nums">
+                {streamProgress.fetched}
+                {streamProgress.total != null ? ` / ${streamProgress.total}` : ''}
+              </span>
+            </div>
+            {streamProgress.total > 0 && (
+              <div className="h-1 bg-outline/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary-container rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min((streamProgress.fetched / streamProgress.total) * 100, 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sync status message */}
         {syncMsg && (

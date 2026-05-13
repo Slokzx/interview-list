@@ -14,6 +14,7 @@ import receiptsRouter      from './routes/receipts.js'
 import syncReceiptsRouter  from './routes/syncReceipts.js'
 import chatRouter          from './routes/chat.js'
 import gmailSearchRouter   from './routes/gmailSearch.js'
+import gmailStreamRouter   from './routes/gmailStream.js'
 
 const app  = express()
 const PORT = process.env.PORT ?? 3001
@@ -82,6 +83,7 @@ app.use('/api/receipts',      receiptsRouter)
 app.use('/api/sync-receipts', syncReceiptsRouter)
 app.use('/api/chat',          chatRouter)
 app.use('/api/gmail-search', gmailSearchRouter)
+app.use('/api/gmail-stream', gmailStreamRouter)
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }))
