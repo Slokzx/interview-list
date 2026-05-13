@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { sendChatMessage } from '../lib/api'
 import { useCustomTables } from '../contexts/CustomTablesContext'
@@ -114,153 +114,121 @@ function SuggestedReplies({ onSelect }) {
   )
 }
 
-// ── Create Research Table CTA ─────────────────────────────────────────────────
-// Only shown after Claude emits [TABLE_READY] — i.e. after user has confirmed all details.
+// ── Auto-generate a readable table name from the user's original query ────────
+function generateTableName(sourceQuery) {
+  if (!sourceQuery) {
+    return `Research ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+  }
+  const cleaned = sourceQuery
+    .replace(/^(can you |please |could you |get me |show me |find |fetch |list |give me |pull )/i, '')
+    .replace(/^(all |the |my )/i, '')
+    .trim()
+  const name = cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+  return name.length > 60 ? name.slice(0, 60) + '…' : name
+}
 
-function CreateTableCTA({ content, sourceQuery, emailPayload, onSaved }) {
-  const navigate  = useNavigate()
-  const [open,    setOpen]    = useState(false)
-  const [name,    setName]    = useState('')
-  const [saving,  setSaving]  = useState(false)
-  const [savedId, setSavedId] = useState(null)
-  const inputRef = useRef(null)
+// ── Auto-create Research Table ────────────────────────────────────────────────
+// Fires immediately on mount — no button click needed.
+
+function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
+  const navigate = useNavigate()
+  const didRun   = useRef(false)
+  const [status, setStatus] = useState('saving') // 'saving' | 'done' | 'error'
+  const [errMsg, setErrMsg] = useState('')
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50)
-  }, [open])
+    if (didRun.current) return
+    didRun.current = true
 
-  // Data source: raw Gmail emails (preferred) → markdown table fallback
-  const hasEmailData = (emailPayload?.rows?.length ?? 0) > 0
-  const rowCount     = emailPayload?.rows?.length ?? 0
+    async function create() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
 
-  if (savedId) {
-    return (
-      <div className="flex items-center gap-2 mt-4 text-sm text-emerald-400 font-sans">
-        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
-        <span>Table created!</span>
-        <Link
-          to={`/research/${savedId}`}
-          className="underline underline-offset-2 hover:text-emerald-300 transition-colors font-semibold"
-        >
-          Open in Research tab →
-        </Link>
-      </div>
-    )
-  }
+        let columns, rows, gmailQuery
 
-  async function handleCreate() {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    setSaving(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
+        if ((emailPayload?.rows?.length ?? 0) > 0) {
+          columns    = emailPayload.columns
+          rows       = emailPayload.rows
+          gmailQuery = emailPayload.query ?? null
+        } else {
+          // Markdown table fallback
+          const tableLines = []
+          let started = false
+          for (const line of content.split('\n')) {
+            const t = line.trim()
+            if (t.startsWith('|') && t.endsWith('|')) { started = true; tableLines.push(t) }
+            else if (started) break
+          }
+          if (tableLines.length < 3) throw new Error('No table data found in response')
 
-      let columns, rows, gmailQuery
-
-      if (hasEmailData) {
-        columns    = emailPayload.columns
-        rows       = emailPayload.rows
-        gmailQuery = emailPayload.query ?? null
-      } else {
-        // Markdown table fallback
-        const tableLines = []
-        let started = false
-        for (const line of content.split('\n')) {
-          const t = line.trim()
-          if (t.startsWith('|') && t.endsWith('|')) { started = true; tableLines.push(t) }
-          else if (started) break
+          columns = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
+          rows = tableLines.slice(2)
+            .filter(line => !/^\|[-:\s|]+\|$/.test(line))
+            .map(line => {
+              const cells = line.split('|').slice(1, -1).map(c => c.trim())
+              const obj = {}
+              columns.forEach((h, idx) => { obj[h] = cells[idx] ?? '' })
+              return obj
+            })
+            .filter(row => Object.values(row).some(v => v))
+          gmailQuery = null
         }
-        if (tableLines.length < 3) { setSaving(false); return }
 
-        columns = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
-        rows = tableLines.slice(2)
-          .filter(line => !/^\|[-:\s|]+\|$/.test(line))
-          .map(line => {
-            const cells = line.split('|').slice(1, -1).map(c => c.trim())
-            const obj = {}
-            columns.forEach((h, i) => { obj[h] = cells[i] ?? '' })
-            return obj
-          })
-          .filter(row => Object.values(row).some(v => v))
+        const { data, error } = await supabase.from('custom_tables').insert({
+          user_id:      session.user.id,
+          name:         generateTableName(sourceQuery),
+          columns,
+          rows,
+          source_query: sourceQuery ?? null,
+          gmail_query:  gmailQuery ?? null,
+        }).select('id').single()
+
+        if (error) throw error
+        setStatus('done')
+        onSaved()
+        navigate(`/research/${data.id}`)
+      } catch (err) {
+        console.error(err)
+        setErrMsg(err.message)
+        setStatus('error')
       }
-
-      const { data, error } = await supabase.from('custom_tables').insert({
-        user_id:      session.user.id,
-        name:         trimmed,
-        columns,
-        rows,
-        source_query: sourceQuery ?? null,
-        gmail_query:  gmailQuery ?? null,
-      }).select('id').single()
-
-      if (error) throw error
-      setSavedId(data.id)
-      onSaved()
-      // Auto-navigate to the new table
-      setTimeout(() => navigate(`/research/${data.id}`), 800)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setSaving(false)
     }
-  }
 
-  // Collapsed state — prominent CTA card
-  if (!open) {
+    create()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (status === 'saving') {
     return (
-      <div className="mt-4 rounded-xl border border-primary-container/30 bg-primary-container/5 p-4 flex items-center gap-4">
-        <div className="w-9 h-9 rounded-lg bg-primary-container/15 border border-primary-container/20 flex items-center justify-center shrink-0">
-          <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 18 }}>table_chart</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-on-surface">Ready to create your Research Table</p>
-          <p className="text-xs text-outline/70 font-sans mt-0.5">
-            {hasEmailData
-              ? `${rowCount} emails · will be saved under the Research tab`
-              : 'Results finalized · will be saved under the Research tab'}
-          </p>
-        </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add</span>
-          Create Table
-        </button>
+      <div className="mt-4 flex items-center gap-2.5 text-sm text-outline/70 font-sans">
+        <span className="w-3.5 h-3.5 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin shrink-0" />
+        Creating your Research Table…
       </div>
     )
   }
 
-  // Expanded — name input
-  return (
-    <div className="mt-4 rounded-xl border border-primary-container/30 bg-primary-container/5 p-4 flex flex-col gap-3">
-      <p className="text-xs font-display font-bold uppercase tracking-widest text-primary-container">
-        Name your Research Table
-      </p>
-      <div className="flex items-center gap-2">
-        <input
-          ref={inputRef}
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setOpen(false) }}
-          placeholder="e.g. Visa Emails 2024"
-          className="flex-1 bg-surface-container-highest/30 border border-primary-container/40 focus:border-primary-container focus:outline-none text-on-surface font-sans text-sm px-3 py-2 rounded-lg placeholder:text-outline/50 transition-all"
-        />
-        <button
-          onClick={handleCreate}
-          disabled={!name.trim() || saving}
-          className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95 disabled:opacity-40 whitespace-nowrap"
-        >
-          {saving ? 'Creating…' : 'Create'}
-        </button>
-        <button
-          onClick={() => setOpen(false)}
-          className="material-symbols-outlined text-outline hover:text-on-surface transition-colors"
-          style={{ fontSize: 18 }}
-        >
-          close
-        </button>
+  if (status === 'done') {
+    return (
+      <div className="mt-4 flex items-center gap-2 text-sm text-emerald-400 font-sans">
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+        Table created — taking you there now…
       </div>
+    )
+  }
+
+  // error state — let user retry manually
+  return (
+    <div className="mt-4 flex flex-col gap-2">
+      <p className="text-xs text-error font-sans flex items-center gap-1.5">
+        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>error</span>
+        Failed to create table: {errMsg}
+      </p>
+      <button
+        onClick={() => { setStatus('saving'); setErrMsg(''); didRun.current = false }}
+        className="self-start text-xs px-3 py-1.5 rounded-lg border border-outline-variant/30 text-on-surface-variant hover:bg-primary-container/10 transition-colors font-sans"
+      >
+        Retry
+      </button>
     </div>
   )
 }
@@ -289,9 +257,9 @@ function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved, onQuickRep
             <>
               {renderContent(msg.content)}
 
-              {/* TABLE_READY: show create CTA */}
+              {/* TABLE_READY: auto-create table and navigate */}
               {!streaming && msg.tableReady && (
-                <CreateTableCTA
+                <AutoCreateTable
                   content={msg.content}
                   sourceQuery={sourceQuery}
                   emailPayload={msg.emailPayload ?? null}

@@ -285,19 +285,17 @@ ${context}`
       }
     }
 
-    // ── Phase 4: only fetch full dataset when Claude finalised the table ────
-    // This keeps Phase 1/2 turns instant — no email fetching after streaming.
-    if (fullText.includes('[TABLE_READY]') && gmailToken) {
-      const allIds   = await searchGmailIds(gmailToken, gmailQuery, 500)
-      const allEmails = await fetchEmailMetaBatch(gmailToken, allIds, 20)
-
+    // ── Phase 4: send already-fetched emails when table is finalised ────────
+    // previewEmails are already in memory — zero extra API calls, instant send.
+    // The ResearchTable Sync button can fetch more emails later if needed.
+    if (fullText.includes('[TABLE_READY]') && previewEmails.length > 0) {
       send({
         type:    'emails',
-        data:    allEmails,
+        data:    previewEmails,
         query:   gmailQuery,
-        total:   allIds.length,
+        total:   previewEmails.length,
         columns: GMAIL_TABLE_COLUMNS,
-        rows:    emailsToRows(allEmails),
+        rows:    emailsToRows(previewEmails),
       })
     }
 
