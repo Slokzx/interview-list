@@ -106,15 +106,17 @@ The user may refine with: "group by company", "only show unresolved", "sort by a
 Your goal is NOT to answer like a chatbot. Behave like an intelligent email analyst, semantic research engine, and structured data generator.`
 
 // Build a rich data context from the user's stored email data
-function buildContext(applications = [], receipts = []) {
+function buildContext(applications, receipts) {
+  const apps = Array.isArray(applications) ? applications : []
+  const rcts = Array.isArray(receipts)     ? receipts     : []
   const lines = []
 
   // ── Applications / job emails ─────────────────────────────────────────
   lines.push('== JOB APPLICATION EMAIL CORPUS ==')
-  lines.push(`Total companies: ${applications.length}`)
+  lines.push(`Total companies: ${apps.length}`)
   lines.push('')
 
-  for (const app of applications) {
+  for (const app of apps) {
     lines.push(`COMPANY: ${app.company ?? '(unknown)'}`)
     lines.push(`  Domain: ${app.company_domain ?? '—'}`)
     lines.push(`  Role: ${app.role ?? '—'}`)
@@ -138,10 +140,10 @@ function buildContext(applications = [], receipts = []) {
 
   // ── Receipts / financial emails ───────────────────────────────────────
   lines.push('== RECEIPT / EXPENSE EMAIL CORPUS ==')
-  lines.push(`Total receipts: ${receipts.length}`)
+  lines.push(`Total receipts: ${rcts.length}`)
   lines.push('')
 
-  for (const r of receipts) {
+  for (const r of rcts) {
     lines.push(`RECEIPT: ${r.company ?? '(unknown)'}`)
     lines.push(`  Amount: ${r.amount != null ? `$${Number(r.amount).toFixed(2)}` : '—'}`)
     lines.push(`  Date: ${r.date ?? '—'}`)
