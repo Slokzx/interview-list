@@ -87,7 +87,16 @@ function extractDomain(from = '') {
   return match ? match[1].toLowerCase() : null
 }
 
-export async function fetchJobEmails(token, onProgress, refreshToken) {
+// Format a Date as YYYY/MM/DD for Gmail's `after:` search operator
+function gmailDateStr(date) {
+  const d = new Date(date)
+  const yyyy = d.getFullYear()
+  const mm   = String(d.getMonth() + 1).padStart(2, '0')
+  const dd   = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}/${mm}/${dd}`
+}
+
+export async function fetchJobEmails(token, onProgress, refreshToken, afterDate = null) {
   const { gmailFetch } = makeGmailFetcher(token, refreshToken)
 
   onProgress?.('Looking up "companies" label…')
@@ -100,12 +109,18 @@ export async function fetchJobEmails(token, onProgress, refreshToken) {
     )
   }
 
+  if (afterDate) {
+    onProgress?.(`Incremental sync — fetching emails after ${gmailDateStr(afterDate)}…`)
+  }
+
   const allMessages = []
   let pageToken = null
 
   do {
     const params = new URLSearchParams({ maxResults: 500 })
     params.append('labelIds', companiesLabel.id)
+    // Server-side date filter: only ask Gmail for emails newer than afterDate
+    if (afterDate) params.set('q', `after:${gmailDateStr(afterDate)}`)
     if (pageToken) params.set('pageToken', pageToken)
 
     const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)

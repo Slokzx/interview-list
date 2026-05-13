@@ -4,7 +4,6 @@ import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AuthCallback from './pages/AuthCallback'
-import Research from './pages/Research'
 import Receipts from './pages/Receipts'
 import Sidebar from './components/Sidebar'
 
@@ -29,7 +28,6 @@ export default function App() {
         <Route path="/login"          element={<Login />} />
         <Route path="/auth/callback"  element={<AuthCallback />} />
         <Route path="/dashboard"      element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
-        <Route path="/research"       element={<ProtectedLayout><Research /></ProtectedLayout>} />
         <Route path="/receipts"       element={<ProtectedLayout><Receipts /></ProtectedLayout>} />
         <Route path="*"               element={<Navigate to="/login" replace />} />
       </Routes>

@@ -3,9 +3,8 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 
-const NAV = [
+const RESEARCH_ITEMS = [
   { to: '/dashboard', icon: 'grid_view',    label: 'Applications' },
-  { to: '/research',  icon: 'science',      label: 'Research' },
   { to: '/receipts',  icon: 'receipt_long', label: 'Receipts' },
 ]
 
@@ -44,9 +43,20 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Nav items */}
+      {/* Nav */}
       <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-hidden">
-        {NAV.map(({ to, icon, label }) => (
+
+        {/* Research section label */}
+        {open && (
+          <p className="px-2.5 pt-2 pb-1 font-display font-bold uppercase tracking-widest text-[9px] text-outline select-none">
+            Research
+          </p>
+        )}
+        {!open && (
+          <div className="h-px bg-outline-variant/20 mx-2 my-1" />
+        )}
+
+        {RESEARCH_ITEMS.map(({ to, icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -55,7 +65,7 @@ export default function Sidebar() {
                 isActive
                   ? 'bg-primary-container/15 text-primary-container'
                   : 'text-on-surface-variant hover:text-on-surface hover:bg-primary-container/5'
-              }`
+              } ${open ? 'pl-4' : ''}`
             }
           >
             <span className="material-symbols-outlined shrink-0" style={{ fontSize: 18 }}>{icon}</span>

@@ -74,7 +74,15 @@ Rules:
   return JSON.parse(text)
 }
 
-export async function fetchAndParseReceiptEmails(token, existingMessageIds = new Set(), onProgress, onBatch, refreshToken) {
+function gmailDateStr(date) {
+  const d = new Date(date)
+  const yyyy = d.getFullYear()
+  const mm   = String(d.getMonth() + 1).padStart(2, '0')
+  const dd   = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}/${mm}/${dd}`
+}
+
+export async function fetchAndParseReceiptEmails(token, existingMessageIds = new Set(), onProgress, onBatch, refreshToken, afterDate = null) {
   const { gmailFetch } = makeGmailFetcher(token, refreshToken)
 
   onProgress?.('Looking up "Receipts" label…')
@@ -85,11 +93,16 @@ export async function fetchAndParseReceiptEmails(token, existingMessageIds = new
     throw new Error('Gmail label "Receipts" not found. Create that label in Gmail, apply it to your receipt emails, then sync again.')
   }
 
+  if (afterDate) {
+    onProgress?.(`Incremental sync — fetching receipts after ${gmailDateStr(afterDate)}…`)
+  }
+
   const allMessages = []
   let pageToken = null
   do {
     const params = new URLSearchParams({ maxResults: 500 })
     params.append('labelIds', receiptsLabel.id)
+    if (afterDate) params.set('q', `after:${gmailDateStr(afterDate)}`)
     if (pageToken) params.set('pageToken', pageToken)
     const { messages = [], nextPageToken } = await gmailFetch(`/messages?${params}`)
     allMessages.push(...messages)

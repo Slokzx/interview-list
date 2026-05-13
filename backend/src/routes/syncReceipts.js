@@ -4,11 +4,18 @@ import { fetchAndParseReceiptEmails } from '../services/receiptEmailParser.js'
 
 const router = Router()
 
+const syncInFlight = new Set()
+
 router.post('/', async (req, res) => {
   const { gmailToken, gmailRefreshToken, userId } = req.body
   if (!gmailToken || !userId) {
     return res.status(400).json({ error: 'gmailToken and userId required' })
   }
+
+  if (syncInFlight.has(userId)) {
+    return res.status(409).json({ error: 'Receipt sync already in progress for this account.' })
+  }
+  syncInFlight.add(userId)
 
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
@@ -25,9 +32,8 @@ router.post('/', async (req, res) => {
   try {
     send({ step: 'fetching', message: 'Connecting to Gmail…' })
 
-    // Load ALL already-processed message IDs (paginated past the 1000-row cap).
-    // Skip emails where company IS SET (real company or '__none__' = intentionally skipped).
-    // Re-process any email where company IS NULL (failed parse from a previous broken run).
+    // ── Load already-processed message IDs (paginated past 1000-row cap) ──
+    // Only skip emails where company IS SET — re-process null (failed parse).
     const PAGE = 1000
     let existingRaw = []
     let from = 0
@@ -47,6 +53,35 @@ router.post('/', async (req, res) => {
     const existingIds = new Set(existingRaw.map(r => r.gmail_message_id))
     send({ step: 'fetching', message: `${existingIds.size} emails already processed, checking for new ones…` })
 
+    // ── Compute afterDate for incremental sync ─────────────────────────────
+    // Find the newest receipt date already stored, back off 30 days for safety.
+    // New users: scan last 24 months only.
+    const MONTHS_FOR_NEW_USER  = 24
+    const SAFETY_BUFFER_DAYS   = 30
+
+    let afterDate
+    if (existingRaw.length === 0) {
+      afterDate = new Date(Date.now() - MONTHS_FOR_NEW_USER * 30 * 86_400_000)
+      send({ step: 'fetching', message: `New account — scanning last ${MONTHS_FOR_NEW_USER} months for receipts…` })
+    } else {
+      // Query the newest receipt date we have stored for this user
+      const { data: newest } = await supabase
+        .from('receipts')
+        .select('date')
+        .eq('user_id', userId)
+        .not('date', 'is', null)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (newest?.date) {
+        afterDate = new Date(new Date(newest.date).getTime() - SAFETY_BUFFER_DAYS * 86_400_000)
+        send({ step: 'fetching', message: `Incremental sync — checking receipts after ${afterDate.toLocaleDateString()}…` })
+      } else {
+        afterDate = new Date(Date.now() - MONTHS_FOR_NEW_USER * 30 * 86_400_000)
+      }
+    }
+
     let totalSaved = 0
 
     const saved = await fetchAndParseReceiptEmails(
@@ -54,7 +89,6 @@ router.post('/', async (req, res) => {
       existingIds,
       (msg) => send({ step: 'fetching', message: msg }),
       async (batch) => {
-        // Upsert without ignoreDuplicates so re-processed emails overwrite null data
         const { error } = await supabase
           .from('receipts')
           .upsert(batch.map(r => ({ ...r, user_id: userId })), {
@@ -65,6 +99,7 @@ router.post('/', async (req, res) => {
         send({ step: 'saving', message: `Saved ${totalSaved} receipts so far…` })
       },
       gmailRefreshToken,
+      afterDate,
     )
 
     const totalScanned = existingIds.size + (typeof saved === 'number' ? saved : 0)
@@ -78,6 +113,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     send({ step: 'error', message: err.message })
   } finally {
+    syncInFlight.delete(userId)
     res.end()
   }
 })
