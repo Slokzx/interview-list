@@ -1,6 +1,10 @@
 import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { parse as parseEnv } from 'dotenv'
+import { readFileSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import {
   buildGmailQuery,
   searchGmailIds,
@@ -11,7 +15,23 @@ import {
 } from '../services/gmailEmails.js'
 
 const router = Router()
-const client = new Anthropic()
+
+// Read API key directly from .env to bypass IDE-injected empty env vars.
+// dotenv's config() skips keys that already exist in process.env (even if empty),
+// so we parse the file manually and pass the key explicitly.
+function resolveApiKey() {
+  const fromEnv = process.env.ANTHROPIC_API_KEY
+  if (fromEnv) return fromEnv
+  try {
+    const __dir = dirname(fileURLToPath(import.meta.url))
+    const raw   = readFileSync(resolve(__dir, '../../.env'), 'utf8')
+    return parseEnv(raw).ANTHROPIC_API_KEY ?? ''
+  } catch {
+    return ''
+  }
+}
+
+const client = new Anthropic({ apiKey: resolveApiKey() })
 
 const SYSTEM_PROMPT = `You are an Email Research and Intelligence Agent.
 
