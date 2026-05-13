@@ -142,7 +142,7 @@ export async function syncEmails({ gmailToken, gmailRefreshToken, userId, access
   }
 }
 
-export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, onDelta }) {
+export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, onDelta, onEmails }) {
   const res = await fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: {
@@ -166,8 +166,23 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue
       const event = JSON.parse(line.slice(6))
-      if (event.type === 'delta') onDelta(event.text)
-      if (event.type === 'error') throw new Error(event.message)
+      if (event.type === 'delta')  onDelta(event.text)
+      if (event.type === 'emails') onEmails?.(event)   // { data, rows, columns, query, total }
+      if (event.type === 'error')  throw new Error(event.message)
     }
   }
+}
+
+/** Re-run a Gmail search — used by Research Table "Sync" button */
+export async function gmailSearch({ query, gmailToken, accessToken, maxResults = 200 }) {
+  const res = await fetch(`${BASE}/gmail-search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ query, gmailToken, maxResults }),
+  })
+  if (!res.ok) throw new Error(`Gmail search failed: ${res.status}`)
+  return res.json()   // { total, fetched, columns, rows, query }
 }
