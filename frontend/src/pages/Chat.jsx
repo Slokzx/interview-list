@@ -159,19 +159,24 @@ function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
             if (t.startsWith('|') && t.endsWith('|')) { started = true; tableLines.push(t) }
             else if (started) break
           }
-          if (tableLines.length < 3) throw new Error('No table data found in response')
-
-          columns = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
-          rows = tableLines.slice(2)
-            .filter(line => !/^\|[-:\s|]+\|$/.test(line))
-            .map(line => {
-              const cells = line.split('|').slice(1, -1).map(c => c.trim())
-              const obj = {}
-              columns.forEach((h, idx) => { obj[h] = cells[idx] ?? '' })
-              return obj
-            })
-            .filter(row => Object.values(row).some(v => v))
-          gmailQuery = null
+          if (tableLines.length < 3) {
+            // No markdown table — create empty table so we still redirect and auto-sync fills it
+            columns    = ['Subject', 'From', 'Date', 'Preview']
+            rows       = []
+            gmailQuery = emailPayload?.query ?? null
+          } else {
+            columns = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
+            rows = tableLines.slice(2)
+              .filter(line => !/^\|[-:\s|]+\|$/.test(line))
+              .map(line => {
+                const cells = line.split('|').slice(1, -1).map(c => c.trim())
+                const obj = {}
+                columns.forEach((h, idx) => { obj[h] = cells[idx] ?? '' })
+                return obj
+              })
+              .filter(row => Object.values(row).some(v => v))
+            gmailQuery = null
+          }
         }
 
         const payload = {

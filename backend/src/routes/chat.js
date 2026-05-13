@@ -247,13 +247,14 @@ router.post('/', async (req, res) => {
 
     const gmailQuery = gmailToken ? buildGmailQuery(message) : null
 
-    // ── Phase 1: parallel — DB fetch + fast Gmail preview (50 IDs = 1 API page) ──
-    // We only fetch 50 emails for Claude's context. Full 500-email fetch only
-    // happens AFTER [TABLE_READY] is detected, so Phase 1/2 turns are fast.
-    const [
-      [{ data: applications }, { data: receipts }],
-      previewIds,
-    ] = await Promise.all([
+    // Hard timeout: Gmail pre-fetch must finish within 7s or we proceed without it.
+    // This guarantees Claude always starts streaming within ~1s of the Gmail deadline.
+    const GMAIL_TIMEOUT_MS = 7_000
+    const timeout = (ms) => new Promise(resolve => setTimeout(() => resolve(null), ms))
+
+    // ── Phase 1: parallel — DB fetch + Gmail preview (with timeout) ────────────
+    const [[{ data: applications }, { data: receipts }], previewEmails] = await Promise.all([
+      // DB queries (always fast)
       Promise.all([
         supabase.from('applications')
           .select('company, company_domain, role, stage, recruiter_name, recruiter_email, industry, company_size, applied_date, last_email_date, email_count, interview_count, raw_emails')
@@ -264,13 +265,18 @@ router.post('/', async (req, res) => {
           .not('company', 'is', null)
           .neq('company', '__none__'),
       ]),
-      gmailToken ? searchGmailIds(gmailToken, gmailQuery, 50) : Promise.resolve([]),
+      // Gmail fetch — races against the timeout, resolves [] if slow or unavailable
+      gmailToken
+        ? Promise.race([
+            (async () => {
+              const ids    = await searchGmailIds(gmailToken, gmailQuery, 50)
+              const emails = await Promise.all(ids.map(m => fetchEmailMeta(gmailToken, m.id)))
+              return emails.filter(Boolean)
+            })(),
+            timeout(GMAIL_TIMEOUT_MS).then(() => []),
+          ])
+        : Promise.resolve([]),
     ])
-
-    // ── Phase 2: fetch email metadata in parallel (all 50, no background work) ─
-    const previewEmails = previewIds.length > 0
-      ? (await Promise.all(previewIds.map(m => fetchEmailMeta(gmailToken, m.id)))).filter(Boolean)
-      : []
 
     // ── Phase 3: build context and stream Claude response ───────────────────
     const context = buildContext(applications, receipts, previewEmails, gmailQuery)
