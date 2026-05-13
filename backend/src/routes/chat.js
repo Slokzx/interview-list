@@ -239,7 +239,17 @@ router.post('/', async (req, res) => {
 
   const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`)
 
+  // Immediately show a status message so the UI isn't blank while we work
+  send({ type: 'status', message: gmailToken ? 'Searching your inbox…' : 'Thinking…' })
+
   try {
+    // ── API key guard — fail fast before any slow work ──────────────────────
+    const apiKey = resolveApiKey()
+    if (!apiKey?.trim()) {
+      send({ type: 'error', message: 'Anthropic API key not configured. Check your .env file.' })
+      return
+    }
+
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -247,12 +257,12 @@ router.post('/', async (req, res) => {
 
     const gmailQuery = gmailToken ? buildGmailQuery(message) : null
 
-    // Hard timeout: Gmail pre-fetch must finish within 7s or we proceed without it.
-    // This guarantees Claude always starts streaming within ~1s of the Gmail deadline.
-    const GMAIL_TIMEOUT_MS = 7_000
-    const timeout = (ms) => new Promise(resolve => setTimeout(() => resolve(null), ms))
+    // ── Phase 1: parallel — DB fetch + Gmail preview (with AbortController) ─
+    // We use an AbortController so Gmail fetch calls are actually cancelled when
+    // the 6s deadline fires, rather than silently continuing in the background.
+    const gmailAbort  = new AbortController()
+    const gmailTimer  = setTimeout(() => gmailAbort.abort(), 6_000)
 
-    // ── Phase 1: parallel — DB fetch + Gmail preview (with timeout) ────────────
     const [[{ data: applications }, { data: receipts }], previewEmails] = await Promise.all([
       // DB queries (always fast)
       Promise.all([
@@ -265,20 +275,27 @@ router.post('/', async (req, res) => {
           .not('company', 'is', null)
           .neq('company', '__none__'),
       ]),
-      // Gmail fetch — races against the timeout, resolves [] if slow or unavailable
+      // Gmail fetch — aborts after 6s so Claude starts within ~7s total
       gmailToken
-        ? Promise.race([
-            (async () => {
-              const ids    = await searchGmailIds(gmailToken, gmailQuery, 50)
-              const emails = await Promise.all(ids.map(m => fetchEmailMeta(gmailToken, m.id)))
+        ? (async () => {
+            try {
+              const ids    = await searchGmailIds(gmailToken, gmailQuery, 30, gmailAbort.signal)
+              const emails = await Promise.all(
+                ids.map(m => fetchEmailMeta(gmailToken, m.id, gmailAbort.signal))
+              )
               return emails.filter(Boolean)
-            })(),
-            timeout(GMAIL_TIMEOUT_MS).then(() => []),
-          ])
+            } catch {
+              return []   // aborted or network error — proceed without Gmail data
+            } finally {
+              clearTimeout(gmailTimer)
+            }
+          })()
         : Promise.resolve([]),
     ])
 
-    // ── Phase 3: build context and stream Claude response ───────────────────
+    clearTimeout(gmailTimer)   // no-op if already cleared, safe to call twice
+
+    // ── Build context and stream Claude response ─────────────────────────────
     const context = buildContext(applications, receipts, previewEmails, gmailQuery)
 
     const systemPrompt = `${SYSTEM_PROMPT}
@@ -294,13 +311,17 @@ ${context}`
       { role: 'user', content: message },
     ]
 
-    const stream = await client.messages.create({
-      model:      'claude-sonnet-4-5',
-      max_tokens: 4096,
-      system:     systemPrompt,
-      messages,
-      stream:     true,
-    })
+    // 45-second hard timeout on the Anthropic call — surfaces errors fast
+    const stream = await client.messages.create(
+      {
+        model:      'claude-sonnet-4-5',
+        max_tokens: 4096,
+        system:     systemPrompt,
+        messages,
+        stream:     true,
+      },
+      { timeout: 45_000 },
+    )
 
     // Buffer full text so we can detect [TABLE_READY] after streaming
     let fullText = ''
@@ -311,9 +332,7 @@ ${context}`
       }
     }
 
-    // ── Phase 4: send already-fetched emails when table is finalised ────────
-    // previewEmails are already in memory — zero extra API calls, instant send.
-    // The ResearchTable Sync button can fetch more emails later if needed.
+    // ── Send already-fetched emails when table is finalised ─────────────────
     if (fullText.includes('[TABLE_READY]') && previewEmails.length > 0) {
       send({
         type:    'emails',
@@ -327,6 +346,7 @@ ${context}`
 
     send({ type: 'done' })
   } catch (err) {
+    console.error('[chat] error:', err.message)
     send({ type: 'error', message: err.message })
   } finally {
     res.end()

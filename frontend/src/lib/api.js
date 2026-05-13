@@ -142,7 +142,7 @@ export async function syncEmails({ gmailToken, gmailRefreshToken, userId, access
   }
 }
 
-export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, onDelta, onEmails }) {
+export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, onDelta, onEmails, onStatus }) {
   const res = await fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: {
@@ -167,6 +167,7 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue
       const event = JSON.parse(line.slice(6))
+      if (event.type === 'status') onStatus?.(event.message)
       if (event.type === 'delta')  onDelta(event.text)
       if (event.type === 'emails') onEmails?.(event)   // { data, rows, columns, query, total }
       if (event.type === 'error')  throw new Error(event.message)

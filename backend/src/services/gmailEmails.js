@@ -66,8 +66,9 @@ export function buildGmailQuery(userMessage) {
 /**
  * Search Gmail and return an array of { id } objects.
  * Paginates automatically up to maxResults.
+ * Pass an AbortSignal to cancel in-flight requests.
  */
-export async function searchGmailIds(gmailToken, query, maxResults = 500) {
+export async function searchGmailIds(gmailToken, query, maxResults = 500, signal = null) {
   const messages = []
   let pageToken  = null
 
@@ -79,6 +80,7 @@ export async function searchGmailIds(gmailToken, query, maxResults = 500) {
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${gmailToken}` },
+      signal,
     })
     if (!res.ok) break
 
@@ -93,15 +95,16 @@ export async function searchGmailIds(gmailToken, query, maxResults = 500) {
 /**
  * Fetch metadata (subject, from, to, date, snippet, hasAttachment, messageId)
  * for a single Gmail message.
+ * Pass an AbortSignal to cancel in-flight requests.
  */
-export async function fetchEmailMeta(gmailToken, messageId) {
+export async function fetchEmailMeta(gmailToken, messageId, signal = null) {
   try {
     const url =
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}` +
       `?format=metadata&metadataHeaders=Subject&metadataHeaders=From` +
       `&metadataHeaders=To&metadataHeaders=Date`
 
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${gmailToken}` } })
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${gmailToken}` }, signal })
     if (!res.ok) return null
 
     const data    = await res.json()

@@ -289,10 +289,15 @@ function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved, onQuickRep
             </>
           )
           : streaming && (
-            <span className="flex gap-1 items-center h-5">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-1.5 h-1.5 rounded-full bg-outline/60 animate-bounce" style={{ animationDelay: `${d}ms` }} />
-              ))}
+            <span className="flex gap-2 items-center h-5 text-outline/70 text-xs">
+              <span className="flex gap-1 items-center shrink-0">
+                {[0, 150, 300].map(d => (
+                  <span key={d} className="w-1.5 h-1.5 rounded-full bg-outline/60 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                ))}
+              </span>
+              {msg.statusMsg && (
+                <span className="animate-pulse">{msg.statusMsg}</span>
+              )}
             </span>
           )
         }
@@ -345,13 +350,24 @@ export default function Chat() {
             return next
           })
         },
+        onStatus(statusMsg) {
+          // Show "Searching your inbox…" in the assistant bubble immediately
+          setMessages(prev => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant' && !last.content) {
+              next[next.length - 1] = { ...last, statusMsg }
+            }
+            return next
+          })
+        },
         onEmails(payload) {
           // payload: { data, rows, columns, query, total }
           setMessages(prev => {
             const next = [...prev]
             const last = next[next.length - 1]
             if (last?.role === 'assistant') {
-              next[next.length - 1] = { ...last, emailPayload: payload }
+              next[next.length - 1] = { ...last, emailPayload: payload, statusMsg: null }
             }
             return next
           })
