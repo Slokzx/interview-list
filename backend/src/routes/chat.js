@@ -106,50 +106,76 @@ The user may refine with: "group by company", "only show unresolved", "sort by a
 Your goal is NOT to answer like a chatbot. Behave like an intelligent email analyst, semantic research engine, and structured data generator.`
 
 // Build a rich data context from the user's stored email data
+// ~4 chars per token; leave ~25K tokens for system prompt + user message + response
+const MAX_CONTEXT_CHARS = 600_000   // ≈ 150K tokens — safe under 200K model limit
+const MAX_EMAILS_PER_APP = 5        // most recent N email subjects per company
+
 function buildContext(applications, receipts) {
   const apps = Array.isArray(applications) ? applications : []
   const rcts = Array.isArray(receipts)     ? receipts     : []
+
   const lines = []
+  let charBudget = MAX_CONTEXT_CHARS
+
+  const push = (...strs) => {
+    for (const s of strs) {
+      lines.push(s)
+      charBudget -= s.length + 1  // +1 for newline
+    }
+  }
 
   // ── Applications / job emails ─────────────────────────────────────────
-  lines.push('== JOB APPLICATION EMAIL CORPUS ==')
-  lines.push(`Total companies: ${apps.length}`)
-  lines.push('')
+  push('== JOB APPLICATION EMAIL CORPUS ==', `Total companies: ${apps.length}`, '')
 
+  let appsIncluded = 0
   for (const app of apps) {
-    lines.push(`COMPANY: ${app.company ?? '(unknown)'}`)
-    lines.push(`  Domain: ${app.company_domain ?? '—'}`)
-    lines.push(`  Role: ${app.role ?? '—'}`)
-    lines.push(`  Stage: ${app.stage ?? 'Applied'}`)
-    lines.push(`  Recruiter: ${app.recruiter_name ?? '—'} <${app.recruiter_email ?? '—'}>`)
-    lines.push(`  Industry: ${app.industry ?? '—'}`)
-    lines.push(`  Size: ${app.company_size ?? '—'}`)
-    lines.push(`  Applied: ${app.applied_date ?? '—'}`)
-    lines.push(`  Last Email: ${app.last_email_date ?? '—'}`)
-    lines.push(`  Interview Count: ${app.interview_count ?? 0}`)
-    lines.push(`  Email Count: ${app.email_count ?? 0}`)
-
-    if (Array.isArray(app.raw_emails) && app.raw_emails.length > 0) {
-      lines.push(`  Emails:`)
-      for (const e of app.raw_emails) {
-        lines.push(`    - [${e.date ?? '?'}] From: ${e.from ?? '?'} | Subject: ${e.subject ?? '(no subject)'}`)
-      }
+    if (charBudget <= 0) {
+      push(`[... ${apps.length - appsIncluded} more companies omitted — token budget reached ...]`)
+      break
     }
-    lines.push('')
+
+    const emails = Array.isArray(app.raw_emails) ? app.raw_emails : []
+    const recent = emails.slice(-MAX_EMAILS_PER_APP) // newest N
+
+    const chunk = [
+      `COMPANY: ${app.company ?? '(unknown)'}`,
+      `  Domain: ${app.company_domain ?? '—'}`,
+      `  Role: ${app.role ?? '—'}`,
+      `  Stage: ${app.stage ?? 'Applied'}`,
+      `  Recruiter: ${app.recruiter_name ?? '—'} <${app.recruiter_email ?? '—'}>`,
+      `  Industry: ${app.industry ?? '—'}`,
+      `  Size: ${app.company_size ?? '—'}`,
+      `  Applied: ${app.applied_date ?? '—'}`,
+      `  Last Email: ${app.last_email_date ?? '—'}`,
+      `  Interview Count: ${app.interview_count ?? 0}`,
+      `  Email Count: ${app.email_count ?? 0}`,
+      ...(recent.length > 0 ? [
+        `  Emails (${recent.length < emails.length ? `${recent.length} of ${emails.length} most recent` : recent.length}):`,
+        ...recent.map(e => `    - [${e.date ?? '?'}] From: ${e.from ?? '?'} | Subject: ${e.subject ?? '(no subject)'}`),
+      ] : []),
+      '',
+    ]
+
+    push(...chunk)
+    appsIncluded++
   }
 
   // ── Receipts / financial emails ───────────────────────────────────────
-  lines.push('== RECEIPT / EXPENSE EMAIL CORPUS ==')
-  lines.push(`Total receipts: ${rcts.length}`)
-  lines.push('')
+  push('== RECEIPT / EXPENSE EMAIL CORPUS ==', `Total receipts: ${rcts.length}`, '')
 
   for (const r of rcts) {
-    lines.push(`RECEIPT: ${r.company ?? '(unknown)'}`)
-    lines.push(`  Amount: ${r.amount != null ? `$${Number(r.amount).toFixed(2)}` : '—'}`)
-    lines.push(`  Date: ${r.date ?? '—'}`)
-    lines.push(`  Category: ${r.category ?? '—'}`)
-    lines.push(`  Description: ${r.description ?? '—'}`)
-    lines.push('')
+    if (charBudget <= 0) {
+      push('[... more receipts omitted — token budget reached ...]')
+      break
+    }
+    push(
+      `RECEIPT: ${r.company ?? '(unknown)'}`,
+      `  Amount: ${r.amount != null ? `$${Number(r.amount).toFixed(2)}` : '—'}`,
+      `  Date: ${r.date ?? '—'}`,
+      `  Category: ${r.category ?? '—'}`,
+      `  Description: ${r.description ?? '—'}`,
+      '',
+    )
   }
 
   return lines.join('\n')
