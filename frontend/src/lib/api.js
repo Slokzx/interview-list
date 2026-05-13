@@ -142,14 +142,14 @@ export async function syncEmails({ gmailToken, gmailRefreshToken, userId, access
   }
 }
 
-export async function sendChatMessage({ message, history, userId, accessToken, onDelta }) {
+export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, onDelta }) {
   const res = await fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ message, history, userId }),
+    body: JSON.stringify({ message, history, userId, gmailToken }),
   })
   if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
 

@@ -289,7 +289,9 @@ export default function Chat() {
       const { data: { session } } = await supabase.auth.getSession()
       await sendChatMessage({
         message: msg, history: snapshot,
-        userId: session.user.id, accessToken: session.access_token,
+        userId:      session.user.id,
+        accessToken: session.access_token,
+        gmailToken:  session.provider_token ?? null,   // live Gmail search
         onDelta(chunk) {
           setMessages(prev => {
             const next = [...prev]
@@ -350,7 +352,7 @@ export default function Chat() {
             </div>
             <div>
               <h1 className="text-2xl font-display font-bold text-on-surface mb-2">What can I help with your email research?</h1>
-              <p className="text-sm text-outline/60 font-sans max-w-md">
+              <p className="text-sm text-outline/60 font-sans">
                 Ask anything about your emails — interviews, subscriptions, receipts, contacts, timelines. When the results look right, save them as a searchable table.
               </p>
             </div>
