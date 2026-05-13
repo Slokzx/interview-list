@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AuthCallback from './pages/AuthCallback'
 import Receipts from './pages/Receipts'
+import Chat from './pages/Chat'
 import Sidebar from './components/Sidebar'
 
 function ProtectedLayout({ children }) {
@@ -27,6 +28,7 @@ export default function App() {
       <Routes>
         <Route path="/login"          element={<Login />} />
         <Route path="/auth/callback"  element={<AuthCallback />} />
+        <Route path="/chat"           element={<ProtectedLayout><Chat /></ProtectedLayout>} />
         <Route path="/dashboard"      element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
         <Route path="/receipts"       element={<ProtectedLayout><Receipts /></ProtectedLayout>} />
         <Route path="*"               element={<Navigate to="/login" replace />} />

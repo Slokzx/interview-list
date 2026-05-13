@@ -12,6 +12,7 @@ import enrichRouter        from './routes/enrich.js'
 import researchRouter      from './routes/research.js'
 import receiptsRouter      from './routes/receipts.js'
 import syncReceiptsRouter  from './routes/syncReceipts.js'
+import chatRouter          from './routes/chat.js'
 
 const app  = express()
 const PORT = process.env.PORT ?? 3001
@@ -62,6 +63,7 @@ app.use('/api', apiLimiter)
 app.use('/api/sync', syncLimiter)
 app.use('/api/sync-receipts', syncLimiter)
 app.use('/api/enrich', syncLimiter)
+app.use('/api/chat', syncLimiter)
 
 // ── Routes ────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({
@@ -77,6 +79,7 @@ app.use('/api/enrich',        enrichRouter)
 app.use('/api/research',      researchRouter)
 app.use('/api/receipts',      receiptsRouter)
 app.use('/api/sync-receipts', syncReceiptsRouter)
+app.use('/api/chat',          chatRouter)
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }))

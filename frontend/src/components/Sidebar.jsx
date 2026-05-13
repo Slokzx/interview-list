@@ -3,6 +3,10 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 
+const TOP_ITEMS = [
+  { to: '/chat', icon: 'auto_awesome', label: 'Research Emails' },
+]
+
 const RESEARCH_ITEMS = [
   { to: '/dashboard', icon: 'grid_view',    label: 'Applications' },
   { to: '/receipts',  icon: 'receipt_long', label: 'Receipts' },
@@ -45,6 +49,31 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-hidden">
+
+        {/* Top-level items */}
+        {TOP_ITEMS.map(({ to, icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-all ${
+                isActive
+                  ? 'bg-primary-container/15 text-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-primary-container/5'
+              }`
+            }
+          >
+            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 18 }}>{icon}</span>
+            {open && (
+              <span className="font-display font-bold uppercase tracking-widest text-[10px] whitespace-nowrap">
+                {label}
+              </span>
+            )}
+          </NavLink>
+        ))}
+
+        {/* Divider before Research section */}
+        <div className="h-px bg-outline-variant/20 mx-1 my-1" />
 
         {/* Research section label */}
         {open && (

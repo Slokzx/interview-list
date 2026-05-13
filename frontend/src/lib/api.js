@@ -141,3 +141,33 @@ export async function syncEmails({ gmailToken, gmailRefreshToken, userId, access
     }
   }
 }
+
+export async function sendChatMessage({ message, history, userId, accessToken, onDelta }) {
+  const res = await fetch(`${BASE}/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ message, history, userId }),
+  })
+  if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop()
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const event = JSON.parse(line.slice(6))
+      if (event.type === 'delta') onDelta(event.text)
+      if (event.type === 'error') throw new Error(event.message)
+    }
+  }
+}

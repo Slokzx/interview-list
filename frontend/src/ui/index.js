@@ -1,5 +1,6 @@
 export { Button }      from './Button'
 export { Input }       from './Input'
+export { Textarea }    from './Textarea'
 export { GlassCard }   from './GlassCard'
 export { Chip }        from './Chip'
 export { ProgressBar } from './ProgressBar'
