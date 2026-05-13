@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { sendChatMessage } from '../lib/api'
 import { useCustomTables } from '../contexts/CustomTablesContext'
 
+const TABLE_READY_MARKER = '[TABLE_READY]'
+
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
 function renderContent(text) {
@@ -78,9 +80,10 @@ function renderContent(text) {
   return blocks
 }
 
-// ── Save as Research Table card ───────────────────────────────────────────────
+// ── Create Research Table CTA ─────────────────────────────────────────────────
+// Only shown after Claude emits [TABLE_READY] — i.e. after user has confirmed all details.
 
-function SaveTableCard({ content, sourceQuery, emailPayload, onSaved }) {
+function CreateTableCTA({ content, sourceQuery, emailPayload, onSaved }) {
   const [open,    setOpen]    = useState(false)
   const [name,    setName]    = useState('')
   const [saving,  setSaving]  = useState(false)
@@ -91,25 +94,20 @@ function SaveTableCard({ content, sourceQuery, emailPayload, onSaved }) {
     if (open) setTimeout(() => inputRef.current?.focus(), 50)
   }, [open])
 
-  // Determine what we're saving:
-  // 1. Raw Gmail email data (preferred — complete dataset)
-  // 2. Parsed markdown table (fallback)
-  const hasEmailData   = emailPayload?.rows?.length > 0
-  const rowCount       = emailPayload?.rows?.length ?? 0
-
-  // For markdown fallback, check if content has a table
-  const hasMarkdown    = !hasEmailData && /^\|.+\|$/m.test(content)
-  const canSave        = hasEmailData || hasMarkdown
-
-  if (!canSave) return null
+  // Data source: raw Gmail emails (preferred) → markdown table fallback
+  const hasEmailData = (emailPayload?.rows?.length ?? 0) > 0
+  const rowCount     = emailPayload?.rows?.length ?? 0
 
   if (savedId) {
     return (
-      <div className="flex items-center gap-2 mt-3 text-xs text-emerald-400 font-sans">
-        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
-        Table saved —{' '}
-        <Link to={`/research/${savedId}`} className="underline underline-offset-2 hover:text-emerald-300 transition-colors">
-          View table
+      <div className="flex items-center gap-2 mt-4 text-sm text-emerald-400 font-sans">
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+        <span>Table created!</span>
+        <Link
+          to={`/research/${savedId}`}
+          className="underline underline-offset-2 hover:text-emerald-300 transition-colors font-semibold"
+        >
+          Open in Research tab →
         </Link>
       </div>
     )
@@ -125,21 +123,19 @@ function SaveTableCard({ content, sourceQuery, emailPayload, onSaved }) {
       let columns, rows, gmailQuery
 
       if (hasEmailData) {
-        // Save raw Gmail data directly
         columns    = emailPayload.columns
         rows       = emailPayload.rows
         gmailQuery = emailPayload.query ?? null
       } else {
-        // Parse markdown table from Claude's response
-        const lines = content.split('\n')
+        // Markdown table fallback
         const tableLines = []
         let started = false
-        for (const line of lines) {
+        for (const line of content.split('\n')) {
           const t = line.trim()
           if (t.startsWith('|') && t.endsWith('|')) { started = true; tableLines.push(t) }
           else if (started) break
         }
-        if (tableLines.length < 3) return
+        if (tableLines.length < 3) { setSaving(false); return }
 
         columns = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
         rows = tableLines.slice(2)
@@ -172,37 +168,62 @@ function SaveTableCard({ content, sourceQuery, emailPayload, onSaved }) {
     }
   }
 
+  // Collapsed state — prominent CTA card
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg border border-primary-container/30 text-primary-container bg-primary-container/5 hover:bg-primary-container/10 transition-all text-[11px] font-display font-bold uppercase tracking-widest active:scale-95"
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>table_chart</span>
-        Save as Research Table
-        {hasEmailData && <span className="text-primary-container/60 font-normal normal-case tracking-normal ml-1">({rowCount} emails)</span>}
-      </button>
+      <div className="mt-4 rounded-xl border border-primary-container/30 bg-primary-container/5 p-4 flex items-center gap-4">
+        <div className="w-9 h-9 rounded-lg bg-primary-container/15 border border-primary-container/20 flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 18 }}>table_chart</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-on-surface">Ready to create your Research Table</p>
+          <p className="text-xs text-outline/70 font-sans mt-0.5">
+            {hasEmailData
+              ? `${rowCount} emails · will be saved under the Research tab`
+              : 'Results finalized · will be saved under the Research tab'}
+          </p>
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add</span>
+          Create Table
+        </button>
+      </div>
     )
   }
 
+  // Expanded — name input
   return (
-    <div className="flex items-center gap-2 mt-3">
-      <input
-        ref={inputRef}
-        value={name}
-        onChange={e => setName(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setOpen(false) }}
-        placeholder="Table name…"
-        className="flex-1 bg-surface-container-highest/30 border border-primary-container/40 focus:border-primary-container focus:outline-none text-on-surface font-sans text-xs px-3 py-1.5 rounded-lg placeholder:text-outline/50 transition-all"
-      />
-      <button
-        onClick={handleCreate}
-        disabled={!name.trim() || saving}
-        className="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95 disabled:opacity-40 whitespace-nowrap"
-      >
-        {saving ? 'Saving…' : 'Create'}
-      </button>
-      <button onClick={() => setOpen(false)} className="material-symbols-outlined text-outline hover:text-on-surface" style={{ fontSize: 16 }}>close</button>
+    <div className="mt-4 rounded-xl border border-primary-container/30 bg-primary-container/5 p-4 flex flex-col gap-3">
+      <p className="text-xs font-display font-bold uppercase tracking-widest text-primary-container">
+        Name your Research Table
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setOpen(false) }}
+          placeholder="e.g. Visa Emails 2024"
+          className="flex-1 bg-surface-container-highest/30 border border-primary-container/40 focus:border-primary-container focus:outline-none text-on-surface font-sans text-sm px-3 py-2 rounded-lg placeholder:text-outline/50 transition-all"
+        />
+        <button
+          onClick={handleCreate}
+          disabled={!name.trim() || saving}
+          className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95 disabled:opacity-40 whitespace-nowrap"
+        >
+          {saving ? 'Creating…' : 'Create'}
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          className="material-symbols-outlined text-outline hover:text-on-surface transition-colors"
+          style={{ fontSize: 18 }}
+        >
+          close
+        </button>
+      </div>
     </div>
   )
 }
@@ -219,22 +240,23 @@ function UserBubble({ content }) {
   )
 }
 
-function AssistantBubble({ content, streaming, sourceQuery, emailPayload, onTableSaved }) {
+function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved }) {
   return (
     <div className="flex gap-3 items-start">
       <div className="w-7 h-7 rounded-lg bg-primary-container/20 border border-primary-container/20 flex items-center justify-center shrink-0 mt-0.5">
         <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 14 }}>auto_awesome</span>
       </div>
       <div className="flex-1 min-w-0 text-sm font-sans leading-relaxed text-on-surface pt-0.5">
-        {content
+        {msg.content
           ? (
             <>
-              {renderContent(content)}
-              {!streaming && (
-                <SaveTableCard
-                  content={content}
+              {renderContent(msg.content)}
+              {/* Only shown once Claude emits [TABLE_READY] and streaming is complete */}
+              {!streaming && msg.tableReady && (
+                <CreateTableCTA
+                  content={msg.content}
                   sourceQuery={sourceQuery}
-                  emailPayload={emailPayload}
+                  emailPayload={msg.emailPayload ?? null}
                   onSaved={onTableSaved}
                 />
               )}
@@ -290,21 +312,39 @@ export default function Chat() {
         onDelta(chunk) {
           setMessages(prev => {
             const next = [...prev]
-            next[next.length - 1] = { ...next[next.length - 1], content: next[next.length - 1].content + chunk }
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant') {
+              next[next.length - 1] = { ...last, content: last.content + chunk }
+            }
             return next
           })
         },
         onEmails(payload) {
           // payload: { data, rows, columns, query, total }
           setMessages(prev => {
-            const next    = [...prev]
-            const lastIdx = next.length - 1
-            if (next[lastIdx]?.role === 'assistant') {
-              next[lastIdx] = { ...next[lastIdx], emailPayload: payload }
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant') {
+              next[next.length - 1] = { ...last, emailPayload: payload }
             }
             return next
           })
         },
+      })
+
+      // After streaming completes: detect [TABLE_READY] marker in final content
+      setMessages(prev => {
+        const next = [...prev]
+        const last = next[next.length - 1]
+        if (last?.role === 'assistant' && last.content.includes(TABLE_READY_MARKER)) {
+          next[next.length - 1] = {
+            ...last,
+            // Strip the marker from visible content
+            content:    last.content.replaceAll(TABLE_READY_MARKER, '').trimEnd(),
+            tableReady: true,
+          }
+        }
+        return next
       })
     } catch (err) {
       setError(err.message)
@@ -357,8 +397,8 @@ export default function Chat() {
             </div>
             <div>
               <h1 className="text-2xl font-display font-bold text-on-surface mb-2">Research your entire email history</h1>
-              <p className="text-sm text-outline/60 font-sans max-w-md">
-                Ask about anything in your inbox — visa emails, flights, subscriptions, contacts, timelines, receipts. I'll search your Gmail live and build a structured table.
+              <p className="text-sm text-outline/60 font-sans">
+                Ask about anything in your inbox. I'll ask a few questions to understand exactly what you need, then create a structured Research Table once everything is confirmed.
               </p>
             </div>
           </div>
@@ -370,10 +410,9 @@ export default function Chat() {
               ? <UserBubble key={i} content={msg.content} />
               : <AssistantBubble
                   key={i}
-                  content={msg.content}
+                  msg={msg}
                   streaming={loading && i === messages.length - 1 && !msg.content}
                   sourceQuery={getSourceQuery(i)}
-                  emailPayload={msg.emailPayload ?? null}
                   onTableSaved={refetchTables}
                 />
           )}
@@ -396,7 +435,7 @@ export default function Chat() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything about your emails… (⌘↵ to send)"
+              placeholder="Ask about anything in your inbox… (⌘↵ to send)"
               rows={1}
               disabled={loading}
               className="flex-1 bg-transparent border-0 outline-none resize-none text-sm font-sans text-on-surface placeholder:text-outline/50 leading-relaxed py-0.5"
