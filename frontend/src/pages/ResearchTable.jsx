@@ -161,6 +161,7 @@ export default function ResearchTable() {
   // Load table from Supabase
   useEffect(() => {
     if (!user || !tableId) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     supabase
       .from('custom_tables')

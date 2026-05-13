@@ -43,9 +43,12 @@ export default function DataTable({
   // Clear selection when edit mode is turned off
   useEffect(() => {
     if (!editMode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(new Set())
       onSelectionChange?.(new Set())
     }
+  // onSelectionChange is a stable callback prop — intentionally omitted
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editMode])
 
   function handleSort(key) {

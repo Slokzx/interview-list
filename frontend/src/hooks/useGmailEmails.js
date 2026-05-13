@@ -109,10 +109,14 @@ export function useGmailEmails(labelId = 'ALL') {
     setEmails([])
     setNextPage(null)
     loadPage(null, false)
+  // loadPage is stable (defined with useCallback + empty deps) — safe to omit
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPage(null, false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return {

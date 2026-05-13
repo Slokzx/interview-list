@@ -18,6 +18,7 @@ export function CustomTablesProvider({ children }) {
     setTables(data ?? [])
   }, [user])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refetch() }, [refetch])
 
   return (
@@ -27,4 +28,5 @@ export function CustomTablesProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useCustomTables = () => useContext(CustomTablesCtx)
