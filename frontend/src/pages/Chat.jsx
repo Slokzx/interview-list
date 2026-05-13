@@ -133,25 +133,26 @@ function generateTableName(sourceQuery) {
 function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
   const navigate = useNavigate()
   const didRun   = useRef(false)
-  const [status, setStatus] = useState('saving') // 'saving' | 'done' | 'error'
-  const [errMsg, setErrMsg] = useState('')
 
   useEffect(() => {
     if (didRun.current) return
     didRun.current = true
 
     async function create() {
+      let tableId = null
       try {
         const { data: { session } } = await supabase.auth.getSession()
 
-        let columns, rows, gmailQuery
+        // ── Build columns + rows ───────────────────────────────────────────
+        let columns    = ['Subject', 'From', 'Date', 'Preview']
+        let rows       = []
+        let gmailQuery = emailPayload?.query ?? null
 
         if ((emailPayload?.rows?.length ?? 0) > 0) {
           columns    = emailPayload.columns
           rows       = emailPayload.rows
-          gmailQuery = emailPayload.query ?? null
         } else {
-          // Markdown table fallback
+          // Try to parse markdown table from Claude's response
           const tableLines = []
           let started = false
           for (const line of content.split('\n')) {
@@ -159,13 +160,9 @@ function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
             if (t.startsWith('|') && t.endsWith('|')) { started = true; tableLines.push(t) }
             else if (started) break
           }
-          if (tableLines.length < 3) {
-            // No markdown table — create empty table so we still redirect and auto-sync fills it
-            columns    = ['Subject', 'From', 'Date', 'Preview']
-            rows       = []
-            gmailQuery = emailPayload?.query ?? null
-          } else {
-            columns = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
+          if (tableLines.length >= 3) {
+            const parsed = tableLines[0].split('|').slice(1, -1).map(h => h.trim()).filter(Boolean)
+            if (parsed.length > 0) columns = parsed
             rows = tableLines.slice(2)
               .filter(line => !/^\|[-:\s|]+\|$/.test(line))
               .map(line => {
@@ -179,33 +176,39 @@ function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
           }
         }
 
-        const payload = {
-          user_id:      session.user.id,
-          name:         generateTableName(sourceQuery),
-          columns,
-          rows,
-          source_query: sourceQuery ?? null,
-          gmail_query:  gmailQuery ?? null,
+        const name = generateTableName(sourceQuery)
+        const userId = session.user.id
+
+        // ── Insert with progressive fallback ──────────────────────────────
+        // Attempt 1: full payload with gmail_query
+        let result = await supabase
+          .from('custom_tables')
+          .insert({ user_id: userId, name, columns, rows, source_query: sourceQuery ?? null, gmail_query: gmailQuery })
+          .select('id').single()
+
+        // Attempt 2: without gmail_query (migration not applied)
+        if (result.error?.message?.includes('gmail_query')) {
+          result = await supabase
+            .from('custom_tables')
+            .insert({ user_id: userId, name, columns, rows, source_query: sourceQuery ?? null })
+            .select('id').single()
         }
 
-        let { data, error } = await supabase.from('custom_tables').insert(payload).select('id').single()
-
-        // Migration 008 not yet applied — retry without gmail_query
-        if (error?.message?.includes('gmail_query')) {
-          // eslint-disable-next-line no-unused-vars
-          const { gmail_query: _drop, ...payloadWithout } = payload
-          ;({ data, error } = await supabase.from('custom_tables').insert(payloadWithout).select('id').single())
+        // Attempt 3: bare-minimum insert — absolutely cannot fail on schema
+        if (result.error) {
+          result = await supabase
+            .from('custom_tables')
+            .insert({ user_id: userId, name, columns: ['Subject', 'From', 'Date', 'Preview'], rows: [] })
+            .select('id').single()
         }
 
-        if (error) throw error
-        setStatus('done')
+        if (!result.error) tableId = result.data.id
         onSaved()
-        // autoSync tells ResearchTable to fetch remaining emails progressively
-        navigate(`/research/${data.id}`, { state: { autoSync: true } })
       } catch (err) {
-        console.error(err)
-        setErrMsg(err.message)
-        setStatus('error')
+        console.error('[AutoCreateTable]', err)
+      } finally {
+        // ALWAYS navigate — to the new table if we have an ID, otherwise to the research list
+        navigate(tableId ? `/research/${tableId}` : '/research', { state: { autoSync: !!tableId } })
       }
     }
 
@@ -213,37 +216,11 @@ function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (status === 'saving') {
-    return (
-      <div className="mt-4 flex items-center gap-2.5 text-sm text-outline/70 font-sans">
-        <span className="w-3.5 h-3.5 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin shrink-0" />
-        Creating your Research Table…
-      </div>
-    )
-  }
-
-  if (status === 'done') {
-    return (
-      <div className="mt-4 flex items-center gap-2 text-sm text-emerald-400 font-sans">
-        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
-        Table created — taking you there now…
-      </div>
-    )
-  }
-
-  // error state — let user retry manually
+  // Always show spinner — component unmounts on navigate so user barely sees it
   return (
-    <div className="mt-4 flex flex-col gap-2">
-      <p className="text-xs text-error font-sans flex items-center gap-1.5">
-        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>error</span>
-        Failed to create table: {errMsg}
-      </p>
-      <button
-        onClick={() => { setStatus('saving'); setErrMsg(''); didRun.current = false }}
-        className="self-start text-xs px-3 py-1.5 rounded-lg border border-outline-variant/30 text-on-surface-variant hover:bg-primary-container/10 transition-colors font-sans"
-      >
-        Retry
-      </button>
+    <div className="mt-4 flex items-center gap-2.5 text-sm text-outline/70 font-sans">
+      <span className="w-3.5 h-3.5 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin shrink-0" />
+      Creating your Research Table…
     </div>
   )
 }
@@ -288,7 +265,7 @@ function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved, onQuickRep
               )}
             </>
           )
-          : streaming && (
+          : (streaming || msg.statusMsg) && (
             <span className="flex gap-2 items-center h-5 text-outline/70 text-xs">
               <span className="flex gap-1 items-center shrink-0">
                 {[0, 150, 300].map(d => (
@@ -309,12 +286,13 @@ function AssistantBubble({ msg, streaming, sourceQuery, onTableSaved, onQuickRep
 // ── Main Chat component ───────────────────────────────────────────────────────
 
 export default function Chat() {
-  const [messages, setMessages] = useState([])
-  const [input,    setInput]    = useState('')
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState(null)
-  const bottomRef               = useRef(null)
-  const textareaRef             = useRef(null)
+  const [messages,   setMessages]   = useState([])
+  const [input,      setInput]      = useState('')
+  const [loading,    setLoading]    = useState(false)  // true while SSE stream is open
+  const [streaming,  setStreaming]  = useState(false)  // true while actively receiving deltas
+  const [error,      setError]      = useState(null)
+  const bottomRef                   = useRef(null)
+  const textareaRef                 = useRef(null)
 
   const { refetch: refetchTables } = useCustomTables()
 
@@ -332,6 +310,7 @@ export default function Chat() {
     const snapshot = [...messages]
     setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'assistant', content: '' }])
     setLoading(true)
+    setStreaming(true)
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -392,6 +371,7 @@ export default function Chat() {
       setError(err.message)
       setMessages(prev => prev.slice(0, -1))
     } finally {
+      setStreaming(false)
       setLoading(false)
       textareaRef.current?.focus()
     }
@@ -453,7 +433,7 @@ export default function Chat() {
               : <AssistantBubble
                   key={i}
                   msg={msg}
-                  streaming={loading && i === messages.length - 1 && !msg.content}
+                  streaming={streaming && i === messages.length - 1}
                   sourceQuery={getSourceQuery(i)}
                   onTableSaved={refetchTables}
                   onQuickReply={send}
