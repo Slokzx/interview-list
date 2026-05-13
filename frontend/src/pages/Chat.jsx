@@ -174,14 +174,23 @@ function AutoCreateTable({ content, sourceQuery, emailPayload, onSaved }) {
           gmailQuery = null
         }
 
-        const { data, error } = await supabase.from('custom_tables').insert({
+        const payload = {
           user_id:      session.user.id,
           name:         generateTableName(sourceQuery),
           columns,
           rows,
           source_query: sourceQuery ?? null,
           gmail_query:  gmailQuery ?? null,
-        }).select('id').single()
+        }
+
+        let { data, error } = await supabase.from('custom_tables').insert(payload).select('id').single()
+
+        // Migration 008 not yet applied — retry without gmail_query
+        if (error?.message?.includes('gmail_query')) {
+          // eslint-disable-next-line no-unused-vars
+          const { gmail_query: _drop, ...payloadWithout } = payload
+          ;({ data, error } = await supabase.from('custom_tables').insert(payloadWithout).select('id').single())
+        }
 
         if (error) throw error
         setStatus('done')
