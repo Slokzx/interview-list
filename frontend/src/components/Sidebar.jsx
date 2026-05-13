@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { useCustomTables } from '../contexts/CustomTablesContext'
 
 const TOP_ITEMS = [
   { to: '/chat', icon: 'auto_awesome', label: 'Research Emails' },
@@ -17,8 +18,9 @@ export default function Sidebar() {
     const stored = localStorage.getItem('sidebar-open')
     return stored === null ? true : stored === 'true'
   })
-  const { user, signOut } = useAuth()
+  const { user, signOut }   = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { tables }          = useCustomTables()
 
   function toggle() {
     const next = !open
@@ -105,6 +107,39 @@ export default function Sidebar() {
             )}
           </NavLink>
         ))}
+
+        {/* Custom research tables saved from chat */}
+        {tables.length > 0 && (
+          <>
+            {open && (
+              <p className="px-2.5 pt-3 pb-1 font-display font-bold uppercase tracking-widest text-[9px] text-outline select-none">
+                Saved Tables
+              </p>
+            )}
+            {!open && <div className="h-px bg-outline-variant/20 mx-2 my-1" />}
+            {tables.map(t => (
+              <NavLink
+                key={t.id}
+                to={`/research/${t.id}`}
+                title={t.name}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-2.5 py-2 rounded-lg transition-all ${
+                    isActive
+                      ? 'bg-primary-container/15 text-primary-container'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-primary-container/5'
+                  } ${open ? 'pl-4' : ''}`
+                }
+              >
+                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16 }}>table_chart</span>
+                {open && (
+                  <span className="font-display font-bold uppercase tracking-widest text-[10px] whitespace-nowrap truncate max-w-[120px]">
+                    {t.name}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Bottom section */}
