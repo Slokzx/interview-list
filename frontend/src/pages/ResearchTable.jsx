@@ -42,78 +42,87 @@ function RowPanel({ row, cols, onClose }) {
     <div className="flex flex-col h-full overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-start justify-between p-5 border-b border-outline-variant/40 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-primary-container/20 border border-primary-container/30 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 18 }}>mail</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/40 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-primary-container/20 border border-primary-container/30 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 14 }}>mail</span>
           </div>
-          <div className="min-w-0">
+          <p className="text-xs font-display font-bold text-on-surface truncate">Details</p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {gmailId && (
+            <a
+              href={gmailLink(gmailId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open in Gmail"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-outline-variant/40 text-on-surface-variant hover:text-primary-container hover:border-primary-container/40 transition-all"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 13 }}>open_in_new</span>
+              <span className="font-display font-bold uppercase tracking-widest text-[9px]">Gmail</span>
+            </a>
+          )}
+          <button
+            onClick={onClose}
+            className="material-symbols-outlined text-outline hover:text-on-surface transition-colors ml-1"
+            style={{ fontSize: 18 }}
+          >
+            close
+          </button>
+        </div>
+      </div>
+
+      {/* Fields */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+
+        {/* Subject as a card — link if Gmail available */}
+        {title && (
+          <div className="glass-l1 rounded-xl p-3">
+            <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline mb-1">Subject</p>
             {gmailId ? (
               <a
                 href={gmailLink(gmailId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex items-start gap-1 hover:text-primary-container transition-colors"
+                className="group flex items-start gap-1"
               >
-                <h2 className="font-display font-semibold text-sm text-on-surface group-hover:text-primary-container leading-snug line-clamp-2 transition-colors">
-                  {title}
-                </h2>
-                <span className="material-symbols-outlined text-outline/40 group-hover:text-primary-container shrink-0 mt-0.5 transition-colors" style={{ fontSize: 13 }}>open_in_new</span>
+                <p className="text-xs font-sans text-on-surface group-hover:text-primary-container leading-relaxed transition-colors">{title}</p>
+                <span className="material-symbols-outlined text-outline/40 group-hover:text-primary-container shrink-0 transition-colors" style={{ fontSize: 12 }}>open_in_new</span>
               </a>
             ) : (
-              <h2 className="font-display font-semibold text-sm text-on-surface leading-snug line-clamp-2">
-                {title}
-              </h2>
-            )}
-            {row.From && (
-              <p className="text-xs text-on-surface-variant font-sans truncate mt-0.5">{row.From}</p>
+              <p className="text-xs font-sans text-on-surface leading-relaxed">{title}</p>
             )}
           </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="material-symbols-outlined text-outline hover:text-on-surface transition-colors text-xl shrink-0 ml-2"
-        >
-          close
-        </button>
-      </div>
+        )}
 
-      {/* Fields */}
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-        <div className="glass-l1 rounded-xl p-4 flex flex-col gap-3">
+        {/* Remaining fields */}
+        <div className="glass-l1 rounded-xl p-3 flex flex-col gap-2.5">
           {visibleCols.map(col => {
-            if (col === 'From' && row.Subject) return null  // shown in header already
+            if (col === 'Subject') return null  // shown above
+            if (col === 'Preview') return null  // shown below
             const val = col === 'Date' ? formatDate(row[col]) : (row[col] ?? '—')
             return (
               <div key={col}>
-                <p className="font-display font-bold uppercase tracking-widest text-[10px] text-on-surface-variant mb-0.5">{col}</p>
-                <p className="text-sm text-on-surface font-sans leading-relaxed break-words">{val || '—'}</p>
+                <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline mb-0.5">{col}</p>
+                <p className="text-xs text-on-surface font-sans leading-relaxed break-words">{val || '—'}</p>
               </div>
             )
           })}
         </div>
 
-        {/* Preview / snippet */}
-        {row.Preview && (
-          <div>
-            <p className="font-display font-bold uppercase tracking-widest text-[10px] text-on-surface-variant mb-2">Preview</p>
-            <p className="text-xs text-outline font-sans leading-relaxed">{row.Preview}</p>
+        {/* Preview snippet */}
+        {(row.Preview || row['Has Attachment']) && (
+          <div className="glass-l1 rounded-xl p-3 flex flex-col gap-2">
+            {row['Has Attachment'] === 'Yes' && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-display font-bold uppercase tracking-widest text-primary-container">
+                <span className="material-symbols-outlined" style={{ fontSize: 11 }}>attach_file</span>
+                Has attachment
+              </span>
+            )}
+            {row.Preview && (
+              <p className="text-[11px] text-outline font-sans leading-relaxed">{row.Preview}</p>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="p-5 border-t border-outline-variant/40 shrink-0 flex gap-2 flex-wrap">
-        {gmailId && (
-          <a
-            href={gmailLink(gmailId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
-            Open in Gmail
-          </a>
         )}
       </div>
     </div>
@@ -534,7 +543,7 @@ export default function ResearchTable() {
 
           {/* Side panel — slides in when a row is selected */}
           {viewRow && (
-            <div className="flex-[2] glass-l1 rounded-xl sticky top-20 h-[calc(100vh-6rem)] overflow-hidden flex flex-col min-h-0">
+            <div className="w-72 shrink-0 glass-l1 rounded-xl sticky top-20 h-[calc(100vh-6rem)] overflow-hidden flex flex-col min-h-0">
               <RowPanel
                 key={JSON.stringify(viewRow)}
                 row={viewRow}
