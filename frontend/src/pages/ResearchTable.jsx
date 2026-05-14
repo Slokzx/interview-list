@@ -48,9 +48,23 @@ function RowPanel({ row, cols, rowIndex, onClose, onEdit }) {
             <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 18 }}>mail</span>
           </div>
           <div className="min-w-0">
-            <h2 className="font-display font-semibold text-sm text-on-surface leading-snug line-clamp-2">
-              {title}
-            </h2>
+            {gmailId ? (
+              <a
+                href={gmailLink(gmailId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-start gap-1 hover:text-primary-container transition-colors"
+              >
+                <h2 className="font-display font-semibold text-sm text-on-surface group-hover:text-primary-container leading-snug line-clamp-2 transition-colors">
+                  {title}
+                </h2>
+                <span className="material-symbols-outlined text-outline/40 group-hover:text-primary-container shrink-0 mt-0.5 transition-colors" style={{ fontSize: 13 }}>open_in_new</span>
+              </a>
+            ) : (
+              <h2 className="font-display font-semibold text-sm text-on-surface leading-snug line-clamp-2">
+                {title}
+              </h2>
+            )}
             {row.From && (
               <p className="text-xs text-on-surface-variant font-sans truncate mt-0.5">{row.From}</p>
             )}
@@ -525,6 +539,8 @@ export default function ResearchTable() {
                           </span>
                         </th>
                       ))}
+                      {/* Gmail link column header */}
+                      <th className="px-3 py-2.5 border-b border-outline-variant/30 w-8" />
                     </tr>
                   </thead>
                   <tbody>
@@ -534,7 +550,7 @@ export default function ResearchTable() {
                         <tr
                           key={i}
                           onClick={() => setViewRow(isSelected ? null : row)}
-                          className={`border-b border-outline-variant/15 transition-colors cursor-pointer ${
+                          className={`border-b border-outline-variant/15 transition-colors cursor-pointer group ${
                             isSelected
                               ? 'bg-primary-container/10'
                               : i % 2 === 1
@@ -547,6 +563,19 @@ export default function ResearchTable() {
                               {col === 'Date' ? formatDate_(row[col]) : (row[col] ?? '—')}
                             </td>
                           ))}
+                          {/* Gmail deep-link icon */}
+                          <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                            {row._gmailId ? (
+                              <a
+                                href={gmailLink(row._gmailId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Open in Gmail"
+                                className="material-symbols-outlined text-outline/30 hover:text-primary-container opacity-0 group-hover:opacity-100 transition-all"
+                                style={{ fontSize: 14 }}
+                              >open_in_new</a>
+                            ) : null}
+                          </td>
                         </tr>
                       )
                     })}
