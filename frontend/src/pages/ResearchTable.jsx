@@ -543,7 +543,7 @@ export default function ResearchTable() {
 
           {/* Side panel — slides in when a row is selected */}
           {viewRow && (
-            <div className="w-72 shrink-0 glass-l1 rounded-xl sticky top-20 h-[calc(100vh-6rem)] overflow-hidden flex flex-col min-h-0">
+            <div className="flex-[2] glass-l1 rounded-xl sticky top-20 max-h-[480px] overflow-hidden flex flex-col min-h-0">
               <RowPanel
                 key={JSON.stringify(viewRow)}
                 row={viewRow}
