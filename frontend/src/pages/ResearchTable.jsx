@@ -25,11 +25,12 @@ const isVisible = col => !col.startsWith('_')
 // Gmail deep link from a raw message ID
 const gmailLink = id => `https://mail.google.com/mail/u/0/#all/${id}`
 
-// ── Row detail modal ──────────────────────────────────────────────────────────
+// ── Row detail side panel ─────────────────────────────────────────────────────
 
-function RowModal({ row, cols, onClose }) {
-  const gmailId = row._gmailId
+function RowPanel({ row, cols, rowIndex, onClose, onEdit }) {
+  const gmailId     = row._gmailId
   const visibleCols = cols.filter(isVisible)
+  const title       = row.Subject ?? row[visibleCols[0]] ?? 'Row Details'
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -38,55 +39,75 @@ function RowModal({ row, cols, onClose }) {
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative glass-l1 rounded-2xl w-full max-w-lg flex flex-col gap-4 shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-3 px-6 pt-5">
-          <div className="w-8 h-8 rounded-lg bg-primary-container/20 border border-primary-container/20 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 16 }}>mail</span>
+    <div className="flex flex-col h-full overflow-hidden">
+
+      {/* Header */}
+      <div className="flex items-start justify-between p-5 border-b border-outline-variant/40 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-primary-container/20 border border-primary-container/30 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 18 }}>mail</span>
           </div>
-          <p className="flex-1 text-sm font-display font-bold text-on-surface truncate">
-            {row.Subject ?? row[visibleCols[0]] ?? 'Email Details'}
-          </p>
-          <button onClick={onClose} className="material-symbols-outlined text-outline hover:text-on-surface" style={{ fontSize: 18 }}>close</button>
+          <div className="min-w-0">
+            <h2 className="font-display font-semibold text-sm text-on-surface leading-snug line-clamp-2">
+              {title}
+            </h2>
+            {row.From && (
+              <p className="text-xs text-on-surface-variant font-sans truncate mt-0.5">{row.From}</p>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="material-symbols-outlined text-outline hover:text-on-surface transition-colors text-xl shrink-0 ml-2"
+        >
+          close
+        </button>
+      </div>
+
+      {/* Fields */}
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+        <div className="glass-l1 rounded-xl p-4 flex flex-col gap-3">
+          {visibleCols.map(col => {
+            if (col === 'From' && row.Subject) return null  // shown in header already
+            const val = col === 'Date' ? formatDate(row[col]) : (row[col] ?? '—')
+            return (
+              <div key={col}>
+                <p className="font-display font-bold uppercase tracking-widest text-[10px] text-on-surface-variant mb-0.5">{col}</p>
+                <p className="text-sm text-on-surface font-sans leading-relaxed break-words">{val || '—'}</p>
+              </div>
+            )
+          })}
         </div>
 
-        {/* Fields */}
-        <div className="px-6 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
-          {visibleCols.map(col => (
-            <div key={col} className="flex flex-col gap-0.5">
-              <span className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">{col}</span>
-              <span className="text-xs text-on-surface font-sans leading-relaxed break-words">
-                {col === 'Date' ? formatDate(row[col]) : (row[col] || '—')}
-              </span>
-            </div>
-          ))}
-        </div>
+        {/* Preview / snippet */}
+        {row.Preview && (
+          <div>
+            <p className="font-display font-bold uppercase tracking-widest text-[10px] text-on-surface-variant mb-2">Preview</p>
+            <p className="text-xs text-outline font-sans leading-relaxed">{row.Preview}</p>
+          </div>
+        )}
+      </div>
 
-        {/* Actions */}
-        <div className="px-6 pb-5 flex gap-2">
-          {gmailId && (
-            <a
-              href={gmailLink(gmailId)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
-              Open in Gmail
-            </a>
-          )}
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-outline-variant/40 text-outline hover:text-on-surface font-display font-bold uppercase tracking-widest text-[10px] transition-all"
+      {/* Actions */}
+      <div className="p-5 border-t border-outline-variant/40 shrink-0 flex gap-2 flex-wrap">
+        {gmailId && (
+          <a
+            href={gmailLink(gmailId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95"
           >
-            Close
-          </button>
-        </div>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+            Open in Gmail
+          </a>
+        )}
+        <button
+          onClick={() => onEdit({ row, index: rowIndex })}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-outline-variant/40 text-on-surface-variant hover:text-on-surface font-display font-bold uppercase tracking-widest text-[10px] transition-all"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
+          Edit
+        </button>
       </div>
     </div>
   )
@@ -473,77 +494,91 @@ export default function ResearchTable() {
           </div>
         )}
 
-        {/* Table */}
-        {rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 gap-2 text-outline/50 text-sm">
-            <span className="material-symbols-outlined" style={{ fontSize: 28 }}>search_off</span>
-            No rows match your filters.
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-outline-variant/30">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-primary-container/10">
-                  {cols.map(col => (
-                    <th
-                      key={col}
-                      onClick={() => handleSort(col)}
-                      className="px-4 py-2.5 text-left text-on-surface font-semibold whitespace-nowrap border-b border-outline-variant/30 font-sans cursor-pointer select-none hover:bg-primary-container/10 transition-colors"
-                    >
-                      <span className="flex items-center gap-1">
-                        {col}
-                        {sortKey === col && (
-                          <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 11 }}>
-                            {sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+        {/* Table + side panel */}
+        <div className="flex gap-5 items-start">
+
+          {/* Table */}
+          <div className={`min-w-0 flex flex-col gap-4 transition-all duration-300 ${viewRow ? 'flex-[3]' : 'flex-1'}`}>
+            {rows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 gap-2 text-outline/50 text-sm">
+                <span className="material-symbols-outlined" style={{ fontSize: 28 }}>search_off</span>
+                No rows match your filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-outline-variant/30">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-primary-container/10">
+                      {cols.map(col => (
+                        <th
+                          key={col}
+                          onClick={() => handleSort(col)}
+                          className="px-4 py-2.5 text-left text-on-surface font-semibold whitespace-nowrap border-b border-outline-variant/30 font-sans cursor-pointer select-none hover:bg-primary-container/10 transition-colors"
+                        >
+                          <span className="flex items-center gap-1">
+                            {col}
+                            {sortKey === col && (
+                              <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 11 }}>
+                                {sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                    </th>
-                  ))}
-                  {/* Edit action column */}
-                  <th className="px-3 py-2.5 border-b border-outline-variant/30 w-10" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr
-                    key={i}
-                    onClick={() => setViewRow(row)}
-                    className={`border-b border-outline-variant/15 hover:bg-primary-container/5 transition-colors cursor-pointer ${i % 2 === 1 ? 'bg-surface-container-highest/5' : ''}`}
-                  >
-                    {cols.map(col => (
-                      <td key={col} className="px-4 py-2.5 text-on-surface-variant font-sans max-w-[280px] truncate">
-                        {col === 'Date' ? formatDate_(row[col]) : (row[col] ?? '—')}
-                      </td>
-                    ))}
-                    {/* Edit button */}
-                    <td className="px-3 py-2.5 text-center" onClick={e => { e.stopPropagation(); setEditRow({ row, index: i }) }}>
-                      <button className="material-symbols-outlined text-outline/40 hover:text-primary-container transition-colors" style={{ fontSize: 15 }}>edit</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => {
+                      const isSelected = viewRow === row
+                      return (
+                        <tr
+                          key={i}
+                          onClick={() => setViewRow(isSelected ? null : row)}
+                          className={`border-b border-outline-variant/15 transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary-container/10'
+                              : i % 2 === 1
+                                ? 'bg-surface-container-highest/5 hover:bg-primary-container/5'
+                                : 'hover:bg-primary-container/5'
+                          }`}
+                        >
+                          {cols.map(col => (
+                            <td key={col} className="px-4 py-2.5 text-on-surface-variant font-sans max-w-[280px] truncate">
+                              {col === 'Date' ? formatDate_(row[col]) : (row[col] ?? '—')}
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Source info */}
+            {table.source_query && (
+              <p className="text-[11px] text-outline/40 font-sans">
+                From "{table.source_query.slice(0, 80)}{table.source_query.length > 80 ? '…' : ''}"
+                {table.gmail_query && <span className="ml-2 font-mono text-outline/30">({table.gmail_query})</span>}
+              </p>
+            )}
           </div>
-        )}
 
-        {/* Source info */}
-        {table.source_query && (
-          <p className="text-[11px] text-outline/40 font-sans">
-            From "{table.source_query.slice(0, 80)}{table.source_query.length > 80 ? '…' : ''}"
-            {table.gmail_query && <span className="ml-2 font-mono text-outline/30">({table.gmail_query})</span>}
-          </p>
-        )}
+          {/* Side panel — slides in when a row is selected */}
+          {viewRow && (
+            <div className="flex-[2] glass-l1 rounded-xl sticky top-20 h-[calc(100vh-6rem)] overflow-hidden flex flex-col min-h-0">
+              <RowPanel
+                key={JSON.stringify(viewRow)}
+                row={viewRow}
+                cols={table.columns ?? []}
+                rowIndex={rows.indexOf(viewRow)}
+                onClose={() => setViewRow(null)}
+                onEdit={setEditRow}
+              />
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Row detail modal */}
-      {viewRow && (
-        <RowModal
-          row={viewRow}
-          cols={table.columns ?? []}
-          onClose={() => setViewRow(null)}
-        />
-      )}
 
       {/* Edit modal */}
       {editRow && (
