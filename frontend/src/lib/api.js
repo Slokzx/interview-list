@@ -142,7 +142,7 @@ export async function syncEmails({ gmailToken, gmailRefreshToken, userId, access
   }
 }
 
-export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, onDelta, onEmails, onStatus }) {
+export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, signal, onDelta, onStatus, onRedirect, onFetching, onTableReady }) {
   const res = await fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: {
@@ -150,6 +150,7 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ message, history, userId, gmailToken }),
+    signal,
   })
   if (res.status === 429) throw new Error('Too many messages — wait a moment and try again.')
   if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
@@ -167,10 +168,12 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue
       const event = JSON.parse(line.slice(6))
-      if (event.type === 'status') onStatus?.(event.message)
-      if (event.type === 'delta')  onDelta(event.text)
-      if (event.type === 'emails') onEmails?.(event)   // { data, rows, columns, query, total }
-      if (event.type === 'error')  throw new Error(event.message)
+      if (event.type === 'status')      onStatus?.(event.message)
+      if (event.type === 'delta')       onDelta(event.text)
+      if (event.type === 'redirect')    onRedirect?.(event.tableId)
+      if (event.type === 'fetching')    onFetching?.()
+      if (event.type === 'table_ready') onTableReady?.(event)
+      if (event.type === 'error')       throw new Error(event.message)
     }
   }
 }

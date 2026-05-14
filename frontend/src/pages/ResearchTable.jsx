@@ -173,8 +173,11 @@ export default function ResearchTable() {
 
   // Auto-sync: when navigated here from Chat after table creation, progressively
   // fetch remaining emails and append them to the table row-by-row.
+  // gmail_query may be missing if the DB migration hasn't been applied yet;
+  // fall back to the value passed via navigation state.
   useEffect(() => {
-    if (!navState?.autoSync || !table || !table.gmail_query) return
+    const gmailQuery = table?.gmail_query ?? navState?.gmailQuery ?? null
+    if (!navState?.autoSync || !table || !gmailQuery) return
     if (autoSyncRan.current) return
     autoSyncRan.current = true
 
@@ -187,7 +190,7 @@ export default function ResearchTable() {
         setStreamProgress({ fetched: 0, total: null, running: true })
 
         await gmailStream({
-          query:       table.gmail_query,
+          query:       gmailQuery,
           gmailToken:  session.provider_token,
           accessToken: session.access_token,
           tableId:     table.id,
@@ -223,6 +226,37 @@ export default function ResearchTable() {
   // Does this table have Gmail data?
   const isGmailTable = allRows.length > 0 && '_gmailId' in (allRows[0] ?? {})
   const hasDateCol   = cols.includes('Date')
+
+  // ── Summary stats (computed from all rows) ────────────────────────────────
+  const summary = useMemo(() => {
+    if (allRows.length === 0) return null
+
+    // Date range
+    const dates = allRows
+      .map(r => parseDate(r.Date))
+      .filter(Boolean)
+      .map(d => d.getTime())
+    const earliest = dates.length ? new Date(Math.min(...dates)) : null
+    const latest   = dates.length ? new Date(Math.max(...dates)) : null
+
+    // Top senders — extract display name or email before the angle-bracket
+    const senderCounts = {}
+    for (const row of allRows) {
+      const raw    = row.From ?? ''
+      const name   = (raw.match(/^([^<]+)/) ?.[1] ?? raw).trim().replace(/^["']|["']$/g, '').trim()
+      const sender = name || raw
+      if (sender) senderCounts[sender] = (senderCounts[sender] ?? 0) + 1
+    }
+    const topSenders = Object.entries(senderCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([name]) => name)
+
+    // Attachments
+    const withAttachment = allRows.filter(r => r['Has Attachment'] === 'Yes').length
+
+    return { earliest, latest, topSenders, withAttachment }
+  }, [allRows])
 
   // Filtered + sorted rows
   const rows = useMemo(() => {
@@ -415,6 +449,75 @@ export default function ResearchTable() {
             </button>
           </div>
         </div>
+
+        {/* Summary card */}
+        {summary && (
+          <div className="glass-l1 border border-outline-variant/30 rounded-xl px-5 py-4 flex flex-wrap gap-5">
+
+            {/* Total */}
+            <div className="flex flex-col gap-0.5 min-w-[80px]">
+              <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Total</p>
+              <p className="text-2xl font-display font-bold text-on-surface leading-none">{allRows.length}</p>
+              <p className="text-[10px] text-outline/60 font-sans">emails</p>
+            </div>
+
+            {/* Divider */}
+            <div className="w-px bg-outline-variant/30 self-stretch" />
+
+            {/* Date range */}
+            {summary.earliest && summary.latest && (
+              <>
+                <div className="flex flex-col gap-0.5">
+                  <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Date range</p>
+                  <p className="text-sm font-sans text-on-surface font-semibold leading-snug">
+                    {summary.earliest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    {' '}–{' '}
+                    {summary.latest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </p>
+                  <p className="text-[10px] text-outline/60 font-sans">
+                    {Math.round((summary.latest - summary.earliest) / (1000 * 60 * 60 * 24 * 30))} months
+                  </p>
+                </div>
+                <div className="w-px bg-outline-variant/30 self-stretch" />
+              </>
+            )}
+
+            {/* Top senders */}
+            {summary.topSenders.length > 0 && (
+              <>
+                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                  <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Top senders</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {summary.topSenders.map(sender => (
+                      <span
+                        key={sender}
+                        className="px-2 py-0.5 rounded-full bg-primary-container/10 border border-primary-container/20 text-[10px] font-sans text-on-surface-variant truncate max-w-[180px]"
+                        title={sender}
+                      >
+                        {sender}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Attachments (only if any) */}
+            {summary.withAttachment > 0 && (
+              <>
+                <div className="w-px bg-outline-variant/30 self-stretch" />
+                <div className="flex flex-col gap-0.5">
+                  <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Attachments</p>
+                  <p className="text-sm font-sans text-on-surface font-semibold leading-snug">{summary.withAttachment}</p>
+                  <p className="text-[10px] text-outline/60 font-sans">
+                    {Math.round((summary.withAttachment / allRows.length) * 100)}% of emails
+                  </p>
+                </div>
+              </>
+            )}
+
+          </div>
+        )}
 
         {/* Progressive email fetch progress bar */}
         {streamProgress && (
