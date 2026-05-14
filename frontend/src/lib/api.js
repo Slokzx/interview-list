@@ -149,7 +149,7 @@ export async function sendChatMessage({ message, history, userId, accessToken, g
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ message, history, userId, gmailToken }),
+    body: JSON.stringify({ message, history, gmailToken }),
     signal,
   })
   if (res.status === 429) throw new Error('Too many messages — wait a moment and try again.')

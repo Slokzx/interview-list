@@ -65,9 +65,10 @@ function generateTableName(query) {
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 router.post('/', async (req, res) => {
-  const { message, history = [], userId, gmailToken } = req.body
-  if (!message?.trim() || !userId) {
-    return res.status(400).json({ error: 'message and userId required' })
+  const { message, history = [], gmailToken } = req.body
+  const userId = req.user.id   // always from verified JWT, never from body
+  if (!message?.trim()) {
+    return res.status(400).json({ error: 'message required' })
   }
 
   res.setHeader('Content-Type', 'text/event-stream')

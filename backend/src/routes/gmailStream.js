@@ -14,9 +14,10 @@ const router = Router()
 // Skips IDs already saved (existingIds), fetches the rest in batches of 10,
 // appends to the table in Supabase incrementally.
 router.post('/', async (req, res) => {
-  const { query, gmailToken, tableId, userId, existingIds = [] } = req.body
-  if (!query || !gmailToken || !tableId || !userId) {
-    return res.status(400).json({ error: 'query, gmailToken, tableId, userId required' })
+  const { query, gmailToken, tableId, existingIds = [] } = req.body
+  const userId = req.user.id   // always from verified JWT, never from body
+  if (!query || !gmailToken || !tableId) {
+    return res.status(400).json({ error: 'query, gmailToken, tableId required' })
   }
 
   res.setHeader('Content-Type', 'text/event-stream')

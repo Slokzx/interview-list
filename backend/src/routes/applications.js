@@ -3,18 +3,18 @@ import { createClient } from '@supabase/supabase-js'
 
 const router = Router()
 
-// Create a per-request Supabase client that uses the user's JWT so RLS applies
-function clientForReq(req) {
-  const token = req.headers.authorization?.split(' ')[1]
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  })
-}
+// Admin client — service role key. RLS is bypassed, so every query MUST
+// include an explicit .eq('user_id', req.user.id) filter. Never omit it.
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 router.get('/', async (req, res) => {
-  const { data, error } = await clientForReq(req)
+  const { data, error } = await supabase
     .from('applications')
     .select('*')
+    .eq('user_id', req.user.id)
     .order('created_at', { ascending: false })
 
   if (error) return res.status(500).json({ error: error.message })
@@ -23,9 +23,9 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const { company, role, stage, notes } = req.body
-  const { data, error } = await clientForReq(req)
+  const { data, error } = await supabase
     .from('applications')
-    .insert({ company, role, stage: stage ?? 'Applied', notes })
+    .insert({ user_id: req.user.id, company, role, stage: stage ?? 'Applied', notes })
     .select()
     .single()
 
@@ -34,11 +34,11 @@ router.post('/', async (req, res) => {
 })
 
 router.patch('/:id', async (req, res) => {
-  const { id } = req.params
-  const { data, error } = await clientForReq(req)
+  const { data, error } = await supabase
     .from('applications')
     .update(req.body)
-    .eq('id', id)
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)   // prevent patching another user's row
     .select()
     .single()
 
@@ -47,8 +47,12 @@ router.patch('/:id', async (req, res) => {
 })
 
 router.delete('/:id', async (req, res) => {
-  const { id } = req.params
-  const { error } = await clientForReq(req).from('applications').delete().eq('id', id)
+  const { error } = await supabase
+    .from('applications')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)   // prevent deleting another user's row
+
   if (error) return res.status(500).json({ error: error.message })
   res.status(204).end()
 })

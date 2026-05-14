@@ -15,6 +15,7 @@ import syncReceiptsRouter  from './routes/syncReceipts.js'
 import chatRouter          from './routes/chat.js'
 import gmailSearchRouter   from './routes/gmailSearch.js'
 import gmailStreamRouter   from './routes/gmailStream.js'
+import { requireAuth }     from './middleware/auth.js'
 
 const app  = express()
 const PORT = process.env.PORT ?? 3001
@@ -83,16 +84,17 @@ app.get('/api/health', (_req, res) => res.json({
   ts: new Date().toISOString(),
 }))
 
-app.use('/api/applications',  applicationsRouter)
-app.use('/api/parse-email',   parseEmailRouter)
-app.use('/api/sync',          syncRouter)
-app.use('/api/enrich',        enrichRouter)
-app.use('/api/research',      researchRouter)
-app.use('/api/receipts',      receiptsRouter)
-app.use('/api/sync-receipts', syncReceiptsRouter)
-app.use('/api/chat',          chatRouter)
-app.use('/api/gmail-search', gmailSearchRouter)
-app.use('/api/gmail-stream', gmailStreamRouter)
+// All routes below require a valid Supabase JWT — req.user is guaranteed after this
+app.use('/api/applications',  requireAuth, applicationsRouter)
+app.use('/api/parse-email',   requireAuth, parseEmailRouter)
+app.use('/api/sync',          requireAuth, syncRouter)
+app.use('/api/enrich',        requireAuth, enrichRouter)
+app.use('/api/research',      requireAuth, researchRouter)
+app.use('/api/receipts',      requireAuth, receiptsRouter)
+app.use('/api/sync-receipts', requireAuth, syncReceiptsRouter)
+app.use('/api/chat',          requireAuth, chatRouter)
+app.use('/api/gmail-search',  requireAuth, gmailSearchRouter)
+app.use('/api/gmail-stream',  requireAuth, gmailStreamRouter)
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }))
