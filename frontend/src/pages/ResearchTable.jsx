@@ -27,7 +27,7 @@ const gmailLink = id => `https://mail.google.com/mail/u/0/#all/${id}`
 
 // ── Row detail side panel ─────────────────────────────────────────────────────
 
-function RowPanel({ row, cols, rowIndex, onClose, onEdit }) {
+function RowPanel({ row, cols, onClose }) {
   const gmailId     = row._gmailId
   const visibleCols = cols.filter(isVisible)
   const title       = row.Subject ?? row[visibleCols[0]] ?? 'Row Details'
@@ -115,58 +115,6 @@ function RowPanel({ row, cols, rowIndex, onClose, onEdit }) {
             Open in Gmail
           </a>
         )}
-        <button
-          onClick={() => onEdit({ row, index: rowIndex })}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-outline-variant/40 text-on-surface-variant hover:text-on-surface font-display font-bold uppercase tracking-widest text-[10px] transition-all"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
-          Edit
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Edit cell modal ────────────────────────────────────────────────────────────
-
-function EditModal({ row, rowIndex, cols, onSave, onClose }) {
-  const [form, setForm] = useState({ ...row })
-  const visibleCols = cols.filter(isVisible)
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative glass-l1 rounded-2xl w-full max-w-lg flex flex-col gap-4 shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 pt-5">
-          <p className="text-sm font-display font-bold text-on-surface">Edit Row {rowIndex + 1}</p>
-          <button onClick={onClose} className="material-symbols-outlined text-outline hover:text-on-surface" style={{ fontSize: 18 }}>close</button>
-        </div>
-
-        <div className="px-6 flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
-          {visibleCols.map(col => (
-            <div key={col}>
-              <label className="block font-display font-bold uppercase tracking-widest text-[9px] text-outline mb-1">{col}</label>
-              <input
-                value={form[col] ?? ''}
-                onChange={e => setForm(f => ({ ...f, [col]: e.target.value }))}
-                className="w-full bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-3 py-2 rounded-lg transition-all"
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="px-6 pb-5 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-outline-variant/40 text-outline font-display font-bold uppercase tracking-widest text-[10px] hover:bg-white/5 transition-all">Cancel</button>
-          <button
-            onClick={() => onSave(rowIndex, form)}
-            className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-display font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all"
-          >
-            Save
-          </button>
-        </div>
       </div>
     </div>
   )
@@ -192,8 +140,7 @@ export default function ResearchTable() {
   const [syncing,   setSyncing]   = useState(false)
   const [syncMsg,   setSyncMsg]   = useState(null)
   const [deleting,  setDeleting]  = useState(false)
-  const [viewRow,   setViewRow]   = useState(null)   // row object for detail modal
-  const [editRow,   setEditRow]   = useState(null)   // { row, index }
+  const [viewRow,   setViewRow]   = useState(null)   // row object for detail panel
   // Progressive loading progress: { fetched, total, running }
   const [streamProgress, setStreamProgress] = useState(null)
 
@@ -347,14 +294,6 @@ export default function ResearchTable() {
       setSyncing(false)
     }
   }, [table, tableId])
-
-  // Edit: save updated row to Supabase
-  async function handleEditSave(rowIndex, updatedRow) {
-    const newRows = allRows.map((r, i) => i === rowIndex ? updatedRow : r)
-    await supabase.from('custom_tables').update({ rows: newRows }).eq('id', tableId)
-    setTable(prev => ({ ...prev, rows: newRows }))
-    setEditRow(null)
-  }
 
   // Delete table
   async function handleDelete() {
@@ -600,25 +539,13 @@ export default function ResearchTable() {
                 key={JSON.stringify(viewRow)}
                 row={viewRow}
                 cols={table.columns ?? []}
-                rowIndex={rows.indexOf(viewRow)}
                 onClose={() => setViewRow(null)}
-                onEdit={setEditRow}
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* Edit modal */}
-      {editRow && (
-        <EditModal
-          row={editRow.row}
-          rowIndex={editRow.index}
-          cols={table.columns ?? []}
-          onSave={handleEditSave}
-          onClose={() => setEditRow(null)}
-        />
-      )}
     </div>
   )
 }
