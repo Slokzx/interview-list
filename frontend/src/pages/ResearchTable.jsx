@@ -589,7 +589,7 @@ export default function ResearchTable() {
                 No rows match your filters.
               </div>
             ) : (
-              <div className="overflow-auto rounded-xl border border-outline-variant/30 max-h-[60vh]">
+              <div className="overflow-auto rounded-xl border border-outline-variant/30 max-h-[80vh]">
                 <table className="w-full text-xs border-collapse">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-primary-container/10">
