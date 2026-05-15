@@ -6,24 +6,31 @@ export default function AuthCallback() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Wait for Supabase to finish the PKCE code exchange and fire SIGNED_IN.
-    // Calling getSession() immediately races with the async code exchange and
-    // returns null before the session is stored — causing a false redirect to /login.
+    let done = false
+    const finish = (session) => {
+      if (done) return
+      done = true
+      if (session) navigate('/chat', { replace: true })
+      else navigate('/login', { replace: true })
+    }
+
+    // Handle both INITIAL_SESSION (first load) and SIGNED_IN (after code exchange)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        navigate('/chat', { replace: true })
-      } else if (event === 'SIGNED_OUT') {
-        navigate('/login', { replace: true })
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        finish(session)
       }
     })
 
-    // In case the session is already established (e.g. refresh / re-visit)
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate('/chat', { replace: true })
-    })
+    // Also try exchanging the code directly from the URL (PKCE flow)
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code)
+        .then(({ data }) => finish(data.session))
+        .catch(() => {}) // onAuthStateChange will handle it
+    }
 
-    // Safety fallback — if neither fires within 10 s, go back to login
-    const timeout = setTimeout(() => navigate('/login', { replace: true }), 10_000)
+    // Fallback: if nothing resolves in 15 s, give up
+    const timeout = setTimeout(() => finish(null), 15_000)
 
     return () => {
       subscription.unsubscribe()
