@@ -240,23 +240,56 @@ export default function ResearchTable() {
     const earliest = dates.length ? new Date(Math.min(...dates)) : null
     const latest   = dates.length ? new Date(Math.max(...dates)) : null
 
-    // Top senders — extract display name or email before the angle-bracket
+    // Sender breakdown
     const senderCounts = {}
     for (const row of allRows) {
       const raw    = row.From ?? ''
-      const name   = (raw.match(/^([^<]+)/) ?.[1] ?? raw).trim().replace(/^["']|["']$/g, '').trim()
+      const name   = (raw.match(/^([^<]+)/)?.[1] ?? raw).trim().replace(/^["']|["']$/g, '').trim()
       const sender = name || raw
       if (sender) senderCounts[sender] = (senderCounts[sender] ?? 0) + 1
     }
-    const topSenders = Object.entries(senderCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([name, count]) => ({ name, count }))
+    const sortedSenders = Object.entries(senderCounts).sort((a, b) => b[1] - a[1])
+    const topSenders    = sortedSenders.slice(0, 4).map(([name, count]) => ({ name, count }))
+    const uniqueSenders = sortedSenders.length
 
-    // Attachments
-    const withAttachment = allRows.filter(r => r['Has Attachment'] === 'Yes').length
+    // ── Generate a natural-language summary ──────────────────────────────
+    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    const monthSpan = earliest && latest
+      ? Math.round((latest - earliest) / (1000 * 60 * 60 * 24 * 30))
+      : null
 
-    return { earliest, latest, topSenders, withAttachment }
+    const parts = []
+
+    // Sentence 1 — overview
+    if (earliest && latest && monthSpan != null) {
+      if (monthSpan <= 1) {
+        parts.push(`${allRows.length} emails found from ${uniqueSenders} sender${uniqueSenders !== 1 ? 's' : ''} within ${fmt(earliest)}.`)
+      } else {
+        parts.push(`${allRows.length} emails found from ${uniqueSenders} sender${uniqueSenders !== 1 ? 's' : ''} between ${fmt(earliest)} and ${fmt(latest)} — a span of ${monthSpan} month${monthSpan !== 1 ? 's' : ''}.`)
+      }
+    } else {
+      parts.push(`${allRows.length} emails found from ${uniqueSenders} sender${uniqueSenders !== 1 ? 's' : ''}.`)
+    }
+
+    // Sentence 2 — top senders
+    if (sortedSenders.length > 0) {
+      const top3 = sortedSenders.slice(0, 3)
+      if (top3.length === 1) {
+        parts.push(`All emails are from ${top3[0][0]}.`)
+      } else {
+        const listed = top3.map(([name, count]) => `${name} (${count})`).join(', ')
+        const rest   = uniqueSenders - top3.length
+        parts.push(`Most frequent: ${listed}${rest > 0 ? `, and ${rest} more sender${rest !== 1 ? 's' : ''}` : ''}.`)
+      }
+    }
+
+    // Sentence 3 — unique subjects if available
+    const subjects = [...new Set(allRows.map(r => r.Subject).filter(Boolean))]
+    if (subjects.length > 0 && subjects.length < allRows.length) {
+      parts.push(`${subjects.length} unique subject${subjects.length !== 1 ? 's' : ''} across all emails.`)
+    }
+
+    return { earliest, latest, topSenders, uniqueSenders, summaryText: parts.join(' ') }
   }, [allRows])
 
   // Filtered + sorted rows
@@ -458,39 +491,40 @@ export default function ResearchTable() {
 
         {/* Summary card */}
         {summary && (
-          <div className="glass-l1 border border-outline-variant/30 rounded-xl px-5 py-4 flex flex-wrap gap-5">
+          <div className="glass-l1 border border-outline-variant/30 rounded-xl px-5 py-4 flex flex-col gap-4">
 
-            {/* Total */}
-            <div className="flex flex-col gap-0.5 min-w-[80px]">
-              <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Total</p>
-              <p className="text-2xl font-display font-bold text-on-surface leading-none">{allRows.length}</p>
-              <p className="text-[10px] text-outline/60 font-sans">emails</p>
-            </div>
+            {/* AI-style summary text */}
+            <p className="text-sm font-sans text-on-surface leading-relaxed">{summary.summaryText}</p>
 
-            {/* Divider */}
-            <div className="w-px bg-outline-variant/30 self-stretch" />
+            {/* Stats row */}
+            <div className="flex flex-wrap gap-5 border-t border-outline-variant/20 pt-4">
 
-            {/* Date range */}
-            {summary.earliest && summary.latest && (
-              <>
-                <div className="flex flex-col gap-0.5">
-                  <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Date range</p>
-                  <p className="text-sm font-sans text-on-surface font-semibold leading-snug">
-                    {summary.earliest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                    {' '}–{' '}
-                    {summary.latest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                  </p>
-                  <p className="text-[10px] text-outline/60 font-sans">
-                    {Math.round((summary.latest - summary.earliest) / (1000 * 60 * 60 * 24 * 30))} months
-                  </p>
-                </div>
-                <div className="w-px bg-outline-variant/30 self-stretch" />
-              </>
-            )}
+              {/* Total */}
+              <div className="flex flex-col gap-0.5 min-w-[60px]">
+                <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Total</p>
+                <p className="text-2xl font-display font-bold text-on-surface leading-none">{allRows.length}</p>
+                <p className="text-[10px] text-outline/60 font-sans">emails</p>
+              </div>
 
-            {/* Top senders — clickable filter pills */}
-            {summary.topSenders.length > 0 && (
-              <>
+              <div className="w-px bg-outline-variant/30 self-stretch" />
+
+              {/* Date range */}
+              {summary.earliest && summary.latest && (
+                <>
+                  <div className="flex flex-col gap-0.5">
+                    <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Date range</p>
+                    <p className="text-sm font-sans text-on-surface font-semibold leading-snug">
+                      {summary.earliest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                      {' '}–{' '}
+                      {summary.latest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="w-px bg-outline-variant/30 self-stretch" />
+                </>
+              )}
+
+              {/* Top senders — clickable filter pills */}
+              {summary.topSenders.length > 0 && (
                 <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                   <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Top senders</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -501,7 +535,7 @@ export default function ResearchTable() {
                           key={name}
                           onClick={() => setSenderFilter(isActive ? null : name)}
                           title={isActive ? `Remove filter: ${name}` : `Filter by: ${name}`}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-sans transition-all active:scale-95 truncate max-w-[200px] ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-sans transition-all active:scale-95 max-w-[200px] ${
                             isActive
                               ? 'bg-primary-container text-on-primary-container border-primary-container font-semibold'
                               : 'bg-primary-container/10 border-primary-container/20 text-on-surface-variant hover:bg-primary-container/20 hover:border-primary-container/40'
@@ -517,22 +551,8 @@ export default function ResearchTable() {
                     })}
                   </div>
                 </div>
-              </>
-            )}
-
-            {/* Attachments (only if any) */}
-            {summary.withAttachment > 0 && (
-              <>
-                <div className="w-px bg-outline-variant/30 self-stretch" />
-                <div className="flex flex-col gap-0.5">
-                  <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Attachments</p>
-                  <p className="text-sm font-sans text-on-surface font-semibold leading-snug">{summary.withAttachment}</p>
-                  <p className="text-[10px] text-outline/60 font-sans">
-                    {Math.round((summary.withAttachment / allRows.length) * 100)}% of emails
-                  </p>
-                </div>
-              </>
-            )}
+              )}
+            </div>
 
           </div>
         )}
