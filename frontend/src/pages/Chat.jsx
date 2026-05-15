@@ -162,10 +162,28 @@ function AssistantBubble({ msg, isLast, streaming }) {
   )
 }
 
+// ── Suggestion chips shown on empty state ────────────────────────────────────
+
+const SUGGESTIONS = [
+  { icon: 'flight',         label: 'Flight bookings',       prompt: 'Find all my flight booking and boarding pass emails' },
+  { icon: 'receipt_long',   label: 'Amazon orders',         prompt: 'Show me all my Amazon order confirmation emails' },
+  { icon: 'work',           label: 'Recruiter emails',      prompt: 'Find emails from recruiters and hiring managers' },
+  { icon: 'subscriptions',  label: 'Subscriptions',         prompt: 'Get all my subscription and renewal billing emails' },
+  { icon: 'hotel',          label: 'Hotel bookings',        prompt: 'Find hotel reservation and booking confirmation emails' },
+  { icon: 'local_shipping', label: 'Deliveries',            prompt: 'Show me shipping and delivery tracking emails' },
+]
+
+const SESSION_KEY = 'chat-messages'
+
 // ── Main Chat component ───────────────────────────────────────────────────────
 
 export default function Chat() {
-  const [messages,     setMessages]     = useState([])
+  const [messages,     setMessages]     = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input,        setInput]        = useState('')
   const [loading,      setLoading]      = useState(false)
   const [streaming,    setStreaming]    = useState(false)
@@ -178,6 +196,11 @@ export default function Chat() {
 
   const navigate                   = useNavigate()
   const { refetch: refetchTables } = useCustomTables()
+
+  // Persist messages to sessionStorage whenever they change
+  useEffect(() => {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(messages)) } catch {}
+  }, [messages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -342,7 +365,7 @@ export default function Chat() {
       {/* Content area */}
       {isEmpty ? (
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
-          <div className="w-full flex flex-col items-center gap-5 text-center">
+          <div className="w-full max-w-2xl flex flex-col items-center gap-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary-container/15 border border-primary-container/20 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 30 }}>auto_awesome</span>
             </div>
@@ -351,6 +374,19 @@ export default function Chat() {
               <p className="text-sm text-outline/60 font-sans">
                 Describe what you're looking for. I'll ask a couple of quick questions to narrow it down, then build you a structured table.
               </p>
+            </div>
+            {/* Suggestion chips */}
+            <div className="flex flex-wrap justify-center gap-2 mt-1">
+              {SUGGESTIONS.map(({ icon, label, prompt }) => (
+                <button
+                  key={label}
+                  onClick={() => send(prompt)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-l1 border border-outline-variant/30 text-sm font-sans text-on-surface-variant hover:text-on-surface hover:border-primary-container/40 hover:bg-primary-container/5 transition-all active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-primary-container/70" style={{ fontSize: 15 }}>{icon}</span>
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -394,7 +430,7 @@ export default function Chat() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Describe the emails you're looking for… (⌘↵ to send)"
+              placeholder="Describe the emails you're looking for…"
               rows={1}
               disabled={loading}
               className="flex-1 bg-transparent border-0 outline-none resize-none text-sm font-sans text-on-surface placeholder:text-outline/50 leading-relaxed py-0.5"
@@ -419,7 +455,7 @@ export default function Chat() {
             )}
           </div>
           <p className="text-center text-[10px] text-outline/40 font-sans mt-2">
-            ⌘↵ to send · searches your live Gmail inbox
+            Enter to send · Shift+Enter for new line · searches your live Gmail inbox
           </p>
         </div>
       </div>
