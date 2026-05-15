@@ -142,7 +142,7 @@ export async function syncEmails({ gmailToken, gmailRefreshToken, userId, access
   }
 }
 
-export async function sendChatMessage({ message, history, userId, accessToken, gmailToken, signal, onDelta, onStatus, onRedirect, onFetching, onTableReady }) {
+export async function sendChatMessage({ message, history, accessToken, gmailToken, signal, onDelta, onStatus, onRedirect, onFetching, onTableReady }) {
   const res = await fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: {
