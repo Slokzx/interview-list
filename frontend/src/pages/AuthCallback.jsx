@@ -14,9 +14,10 @@ export default function AuthCallback() {
       else navigate('/login', { replace: true })
     }
 
-    // Handle both INITIAL_SESSION (first load) and SIGNED_IN (after code exchange)
+    // INITIAL_SESSION fires immediately with null before code exchange completes — ignore null.
+    // SIGNED_IN fires once Supabase successfully exchanges the code for a session.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+      if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         finish(session)
       }
     })
