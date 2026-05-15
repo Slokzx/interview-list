@@ -315,7 +315,8 @@ export default function Chat() {
   }, [saving, pendingTable, navigate, refetchTables])
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() }
+    // Enter sends, Shift+Enter inserts a new line
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
   function handleInput(e) {
