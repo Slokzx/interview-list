@@ -8,6 +8,8 @@ const TOP_ITEMS = [
   { to: '/chat', icon: 'auto_awesome', label: 'Research Emails' },
 ]
 
+const OWNER_EMAIL = 'slokshah92@gmail.com'
+
 const RESEARCH_ITEMS = [
   { to: '/dashboard', icon: 'grid_view',    label: 'Applications' },
   { to: '/receipts',  icon: 'receipt_long', label: 'Receipts' },
@@ -21,6 +23,8 @@ export default function Sidebar() {
   const { user, signOut }   = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { tables }          = useCustomTables()
+
+  const isOwner = user?.email === OWNER_EMAIL
 
   function toggle() {
     const next = !open
@@ -78,35 +82,39 @@ export default function Sidebar() {
         <div className="h-px bg-outline-variant/20 mx-1 my-1" />
 
         {/* Research section label */}
-        {open && (
-          <p className="px-2.5 pt-2 pb-1 font-display font-bold uppercase tracking-widest text-[9px] text-outline select-none">
-            Research
-          </p>
-        )}
-        {!open && (
-          <div className="h-px bg-outline-variant/20 mx-2 my-1" />
-        )}
-
-        {RESEARCH_ITEMS.map(({ to, icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-all ${
-                isActive
-                  ? 'bg-primary-container/15 text-primary-container'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-primary-container/5'
-              } ${open ? 'pl-4' : ''}`
-            }
-          >
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 18 }}>{icon}</span>
+        {isOwner && (
+          <>
             {open && (
-              <span className="font-display font-bold uppercase tracking-widest text-[10px] whitespace-nowrap">
-                {label}
-              </span>
+              <p className="px-2.5 pt-2 pb-1 font-display font-bold uppercase tracking-widest text-[9px] text-outline select-none">
+                Research
+              </p>
             )}
-          </NavLink>
-        ))}
+            {!open && (
+              <div className="h-px bg-outline-variant/20 mx-2 my-1" />
+            )}
+
+            {RESEARCH_ITEMS.map(({ to, icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-all ${
+                    isActive
+                      ? 'bg-primary-container/15 text-primary-container'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-primary-container/5'
+                  } ${open ? 'pl-4' : ''}`
+                }
+              >
+                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 18 }}>{icon}</span>
+                {open && (
+                  <span className="font-display font-bold uppercase tracking-widest text-[10px] whitespace-nowrap">
+                    {label}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </>
+        )}
 
         {/* Custom research tables saved from chat */}
         {tables.length > 0 && (

@@ -10,10 +10,14 @@ import Chat from './pages/Chat'
 import ResearchTable from './pages/ResearchTable'
 import Sidebar from './components/Sidebar'
 
-function ProtectedLayout({ children }) {
+const OWNER_EMAIL = 'slokshah92@gmail.com'
+
+function ProtectedLayout({ children, ownerOnly = false }) {
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
+  // Pages marked ownerOnly redirect everyone else to /chat
+  if (ownerOnly && user.email !== OWNER_EMAIL) return <Navigate to="/chat" replace />
   return (
     <CustomTablesProvider>
       <div className="flex min-h-screen bg-background text-on-background font-sans">
@@ -33,8 +37,8 @@ export default function App() {
         <Route path="/login"                element={<Login />} />
         <Route path="/auth/callback"        element={<AuthCallback />} />
         <Route path="/chat"                 element={<ProtectedLayout><Chat /></ProtectedLayout>} />
-        <Route path="/dashboard"            element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
-        <Route path="/receipts"             element={<ProtectedLayout><Receipts /></ProtectedLayout>} />
+        <Route path="/dashboard"            element={<ProtectedLayout ownerOnly><Dashboard /></ProtectedLayout>} />
+        <Route path="/receipts"             element={<ProtectedLayout ownerOnly><Receipts /></ProtectedLayout>} />
         <Route path="/research/:tableId"    element={<ProtectedLayout><ResearchTable /></ProtectedLayout>} />
         <Route path="*"                     element={<Navigate to="/login" replace />} />
       </Routes>
