@@ -2,6 +2,7 @@ import './index.css'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { CustomTablesProvider } from './contexts/CustomTablesContext'
+import { MobileSidebarProvider } from './contexts/MobileSidebarContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AuthCallback from './pages/AuthCallback'
@@ -20,12 +21,14 @@ function ProtectedLayout({ children, ownerOnly = false }) {
   if (ownerOnly && user.email !== OWNER_EMAIL) return <Navigate to="/chat" replace />
   return (
     <CustomTablesProvider>
-      <div className="flex min-h-screen bg-background text-on-background font-sans">
-        <Sidebar />
-        <div className="flex-1 min-w-0 overflow-auto">
-          {children}
+      <MobileSidebarProvider>
+        <div className="flex min-h-screen bg-background text-on-background font-sans">
+          <Sidebar />
+          <div className="flex-1 min-w-0 overflow-auto">
+            {children}
+          </div>
         </div>
-      </div>
+      </MobileSidebarProvider>
     </CustomTablesProvider>
   )
 }

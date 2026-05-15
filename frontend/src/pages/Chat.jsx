@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { sendChatMessage } from '../lib/api'
 import { useCustomTables } from '../contexts/CustomTablesContext'
+import { useMobileSidebar } from '../contexts/MobileSidebarContext'
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ export default function Chat() {
 
   const navigate                   = useNavigate()
   const { refetch: refetchTables } = useCustomTables()
+  const { toggle: toggleSidebar }  = useMobileSidebar()
 
   // Persist messages to sessionStorage whenever they change
   useEffect(() => {
@@ -355,7 +357,13 @@ export default function Chat() {
     <div className="flex flex-col min-h-screen">
 
       {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md shrink-0 h-14 px-8 border-b border-outline-variant/20 flex items-center gap-3">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md shrink-0 h-14 px-4 md:px-8 border-b border-outline-variant/20 flex items-center gap-3">
+        <button
+          onClick={toggleSidebar}
+          className="md:hidden w-8 h-8 flex items-center justify-center text-outline hover:text-on-surface transition-colors"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>menu</span>
+        </button>
         <div className="w-8 h-8 rounded-xl bg-primary-container/20 border border-primary-container/20 flex items-center justify-center">
           <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 16 }}>auto_awesome</span>
         </div>
@@ -409,7 +417,7 @@ export default function Chat() {
       )}
 
       {/* Sticky input bar */}
-      <div className="sticky bottom-0 z-20 bg-background/80 backdrop-blur-md px-8 pb-6 pt-4">
+      <div className="sticky bottom-0 z-20 bg-background/80 backdrop-blur-md px-4 md:px-8 pb-6 pt-4">
         <div className="w-full max-w-2xl mx-auto">
 
           {/* Suggestion pills — always visible when chat is blank */}

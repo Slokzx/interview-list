@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { gmailSearch, gmailStream } from '../lib/api'
 import { useAuth } from '../hooks/useAuth'
 import { useCustomTables } from '../contexts/CustomTablesContext'
+import { useMobileSidebar } from '../contexts/MobileSidebarContext'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,7 @@ export default function ResearchTable() {
   const navigate     = useNavigate()
   const { state: navState } = useLocation()
   const { refetch: refetchSidebar } = useCustomTables()
+  const { toggle: toggleSidebar }   = useMobileSidebar()
   const autoSyncRan  = useRef(false)
 
   const [table,     setTable]     = useState(null)
@@ -391,7 +393,13 @@ export default function ResearchTable() {
     <div className="flex flex-col min-h-screen">
 
       {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md shrink-0 h-14 px-8 border-b border-outline-variant/20 flex items-center gap-3">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md shrink-0 h-14 px-4 md:px-8 border-b border-outline-variant/20 flex items-center gap-3">
+        <button
+          onClick={toggleSidebar}
+          className="md:hidden w-8 h-8 flex items-center justify-center text-outline hover:text-on-surface transition-colors"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>menu</span>
+        </button>
         <div className="w-8 h-8 rounded-xl bg-primary-container/20 border border-primary-container/20 flex items-center justify-center">
           <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 16 }}>table_chart</span>
         </div>
@@ -402,7 +410,7 @@ export default function ResearchTable() {
         </Link>
       </div>
 
-      <div className="px-8 py-5 flex flex-col gap-4">
+      <div className="px-4 md:px-8 py-4 md:py-5 flex flex-col gap-4">
 
         {/* Filter + action bar */}
         <div className="flex flex-wrap items-center gap-2">
@@ -423,12 +431,12 @@ export default function ResearchTable() {
 
           {/* Date range filter (only shown if Date column exists) */}
           {hasDateCol && (
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg w-32 [color-scheme:dark]" />
+                className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg w-28 md:w-32 [color-scheme:dark]" />
               <span className="text-outline text-xs">→</span>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg w-32 [color-scheme:dark]" />
+                className="bg-surface-container-highest/30 border border-outline-variant focus:border-primary focus:outline-none text-on-surface font-sans text-xs px-2 py-1.5 rounded-lg w-28 md:w-32 [color-scheme:dark]" />
             </div>
           )}
 

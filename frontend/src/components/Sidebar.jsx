@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useCustomTables } from '../contexts/CustomTablesContext'
+import { useMobileSidebar } from '../contexts/MobileSidebarContext'
 
 const TOP_ITEMS = [
   { to: '/chat', icon: 'auto_awesome', label: 'Research Emails' },
@@ -15,52 +16,23 @@ const RESEARCH_ITEMS = [
   { to: '/receipts',  icon: 'receipt_long', label: 'Receipts' },
 ]
 
-export default function Sidebar() {
-  const [open, setOpen] = useState(() => {
-    const stored = localStorage.getItem('sidebar-open')
-    return stored === null ? true : stored === 'true'
-  })
-  const { user, signOut }   = useAuth()
-  const { theme, toggleTheme } = useTheme()
-  const { tables }          = useCustomTables()
-
+function SidebarNav({ open, onLinkClick }) {
+  const { user, signOut }       = useAuth()
+  const { theme, toggleTheme }  = useTheme()
+  const { tables }              = useCustomTables()
   const isOwner = user?.email === OWNER_EMAIL
 
-  function toggle() {
-    const next = !open
-    setOpen(next)
-    localStorage.setItem('sidebar-open', String(next))
-  }
-
   return (
-    <aside
-      className={`${open ? 'w-52' : 'w-14'} transition-[width] duration-200 ease-in-out shrink-0 flex flex-col h-screen sticky top-0 bg-nav border-r border-outline-variant/30 z-30`}
-    >
-      {/* Logo + toggle */}
-      <div className="flex items-center h-14 px-3 gap-2 border-b border-outline-variant/30 shrink-0">
-        {open && (
-          <span className="font-display text-base font-bold tracking-tight text-primary-container flex-1 overflow-hidden whitespace-nowrap">
-            Track
-          </span>
-        )}
-        <button
-          onClick={toggle}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface transition-colors shrink-0"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-            {open ? 'menu_open' : 'menu'}
-          </span>
-        </button>
-      </div>
-
+    <>
       {/* Nav */}
-      <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-hidden">
+      <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-y-auto overflow-x-hidden">
 
         {/* Top-level items */}
         {TOP_ITEMS.map(({ to, icon, label }) => (
           <NavLink
             key={to}
             to={to}
+            onClick={onLinkClick}
             className={({ isActive }) =>
               `flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-all ${
                 isActive
@@ -97,6 +69,7 @@ export default function Sidebar() {
               <NavLink
                 key={to}
                 to={to}
+                onClick={onLinkClick}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-all ${
                     isActive
@@ -130,6 +103,7 @@ export default function Sidebar() {
                 key={t.id}
                 to={`/research/${t.id}`}
                 title={t.name}
+                onClick={onLinkClick}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-2.5 py-2 rounded-lg transition-all ${
                     isActive
@@ -194,6 +168,77 @@ export default function Sidebar() {
           )}
         </button>
       </div>
-    </aside>
+    </>
+  )
+}
+
+export default function Sidebar() {
+  const [open, setOpen] = useState(() => {
+    const stored = localStorage.getItem('sidebar-open')
+    return stored === null ? true : stored === 'true'
+  })
+  const { open: mobileOpen, close: mobileClose } = useMobileSidebar()
+
+  function toggle() {
+    const next = !open
+    setOpen(next)
+    localStorage.setItem('sidebar-open', String(next))
+  }
+
+  return (
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={mobileClose}
+        />
+      )}
+
+      {/* Sidebar — fixed on mobile (drawer), sticky on desktop */}
+      <aside
+        className={[
+          'flex flex-col h-screen bg-nav border-r border-outline-variant/30 z-50 shrink-0',
+          // Mobile: fixed overlay, slides in/out
+          'fixed inset-y-0 left-0 w-64 transition-transform duration-200',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          // Desktop: override fixed positioning back to sticky, collapsible width
+          'md:static md:translate-x-0 md:transition-[width] md:z-30',
+          open ? 'md:w-52' : 'md:w-14',
+        ].join(' ')}
+      >
+        {/* Logo + toggle */}
+        <div className="flex items-center h-14 px-3 gap-2 border-b border-outline-variant/30 shrink-0">
+          {/* Mobile close button */}
+          <button
+            onClick={mobileClose}
+            className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface transition-colors shrink-0"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+          </button>
+
+          {/* Track label — visible when expanded (desktop) or always on mobile */}
+          <span className={`font-display text-base font-bold tracking-tight text-primary-container flex-1 overflow-hidden whitespace-nowrap ${open ? 'hidden md:block' : 'hidden'} md:block`}>
+            Track
+          </span>
+          <span className="md:hidden font-display text-base font-bold tracking-tight text-primary-container flex-1 overflow-hidden whitespace-nowrap">
+            Track
+          </span>
+
+          {/* Desktop collapse toggle */}
+          <button
+            onClick={toggle}
+            className="hidden md:flex w-8 h-8 rounded-lg items-center justify-center text-outline hover:text-on-surface transition-colors shrink-0"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+              {open ? 'menu_open' : 'menu'}
+            </span>
+          </button>
+        </div>
+
+        {/* Shared nav content — on mobile always "expanded" (open=true), on desktop follows `open` state */}
+        <SidebarNav open={open || mobileOpen} onLinkClick={mobileClose} />
+      </aside>
+    </>
   )
 }
