@@ -199,7 +199,7 @@ export default function Chat() {
 
   // Persist messages to sessionStorage whenever they change
   useEffect(() => {
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(messages)) } catch (_) { /* storage unavailable */ }
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(messages)) } catch (e) { void e }
   }, [messages])
 
   useEffect(() => {
