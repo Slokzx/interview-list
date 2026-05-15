@@ -7,34 +7,40 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let done = false
-    const finish = (session) => {
+
+    const go = (path) => {
       if (done) return
       done = true
-      if (session) navigate('/chat', { replace: true })
-      else navigate('/login', { replace: true })
+      navigate(path, { replace: true })
     }
 
-    // INITIAL_SESSION fires immediately with null before code exchange completes — ignore null.
-    // SIGNED_IN fires once Supabase successfully exchanges the code for a session.
+    // Supabase v2 automatically detects the code/token in the URL and fires
+    // SIGNED_IN once the PKCE exchange completes. We just wait for it.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-        finish(session)
+      if (event === 'SIGNED_IN' && session) {
+        go('/chat')
       }
     })
 
-    // Also try exchanging the code directly from the URL (PKCE flow)
-    const code = new URLSearchParams(window.location.search).get('code')
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code)
-        .then(({ data }) => finish(data.session))
-        .catch(() => {}) // onAuthStateChange will handle it
-    }
+    // Poll getSession every 500 ms — catches cases where SIGNED_IN already
+    // fired before our listener was attached (race on fast connections).
+    const poll = setInterval(async () => {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) {
+        clearInterval(poll)
+        go('/chat')
+      }
+    }, 500)
 
-    // Fallback: if nothing resolves in 15 s, give up
-    const timeout = setTimeout(() => finish(null), 15_000)
+    // Give up after 20 s and send back to login
+    const timeout = setTimeout(() => {
+      clearInterval(poll)
+      go('/login')
+    }, 20_000)
 
     return () => {
       subscription.unsubscribe()
+      clearInterval(poll)
       clearTimeout(timeout)
     }
   }, [navigate])
