@@ -146,6 +146,7 @@ export default function ResearchTable() {
   const [dateTo,    setDateTo]    = useState('')
   const [sortKey,   setSortKey]   = useState(null)
   const [sortDir,   setSortDir]   = useState('asc')
+  const [senderFilter, setSenderFilter] = useState(null)
   const [syncing,   setSyncing]   = useState(false)
   const [syncMsg,   setSyncMsg]   = useState(null)
   const [deleting,  setDeleting]  = useState(false)
@@ -250,7 +251,7 @@ export default function ResearchTable() {
     const topSenders = Object.entries(senderCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
-      .map(([name]) => name)
+      .map(([name, count]) => ({ name, count }))
 
     // Attachments
     const withAttachment = allRows.filter(r => r['Has Attachment'] === 'Yes').length
@@ -265,6 +266,11 @@ export default function ResearchTable() {
     if (search.trim()) {
       const q = search.toLowerCase()
       r = r.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
+    }
+
+    if (senderFilter) {
+      const sf = senderFilter.toLowerCase()
+      r = r.filter(row => (row.From ?? '').toLowerCase().includes(sf))
     }
 
     if (hasDateCol && dateFrom) {
@@ -297,7 +303,7 @@ export default function ResearchTable() {
     }
 
     return r
-  }, [allRows, search, dateFrom, dateTo, sortKey, sortDir, hasDateCol])
+  }, [allRows, search, senderFilter, dateFrom, dateTo, sortKey, sortDir, hasDateCol])
 
   function handleSort(col) {
     if (sortKey === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -358,7 +364,7 @@ export default function ResearchTable() {
     )
   }
 
-  const hasFilter = search || dateFrom || dateTo
+  const hasFilter = search || dateFrom || dateTo || senderFilter
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -406,7 +412,7 @@ export default function ResearchTable() {
           )}
 
           {hasFilter && (
-            <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }}
+            <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setSenderFilter(null) }}
               className="flex items-center gap-1 text-xs text-outline hover:text-on-surface font-sans transition-colors">
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>filter_list_off</span>Clear
             </button>
@@ -482,21 +488,33 @@ export default function ResearchTable() {
               </>
             )}
 
-            {/* Top senders */}
+            {/* Top senders — clickable filter pills */}
             {summary.topSenders.length > 0 && (
               <>
                 <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                   <p className="font-display font-bold uppercase tracking-widest text-[9px] text-outline">Top senders</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {summary.topSenders.map(sender => (
-                      <span
-                        key={sender}
-                        className="px-2 py-0.5 rounded-full bg-primary-container/10 border border-primary-container/20 text-[10px] font-sans text-on-surface-variant truncate max-w-[180px]"
-                        title={sender}
-                      >
-                        {sender}
-                      </span>
-                    ))}
+                    {summary.topSenders.map(({ name, count }) => {
+                      const isActive = senderFilter === name
+                      return (
+                        <button
+                          key={name}
+                          onClick={() => setSenderFilter(isActive ? null : name)}
+                          title={isActive ? `Remove filter: ${name}` : `Filter by: ${name}`}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-sans transition-all active:scale-95 truncate max-w-[200px] ${
+                            isActive
+                              ? 'bg-primary-container text-on-primary-container border-primary-container font-semibold'
+                              : 'bg-primary-container/10 border-primary-container/20 text-on-surface-variant hover:bg-primary-container/20 hover:border-primary-container/40'
+                          }`}
+                        >
+                          <span className="truncate">{name}</span>
+                          <span className={`shrink-0 text-[9px] px-1 py-px rounded-full ${isActive ? 'bg-on-primary-container/20' : 'bg-primary-container/20'}`}>
+                            {count}
+                          </span>
+                          {isActive && <span className="material-symbols-outlined shrink-0" style={{ fontSize: 10 }}>close</span>}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </>
