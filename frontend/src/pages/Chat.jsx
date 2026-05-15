@@ -375,19 +375,6 @@ export default function Chat() {
                 Describe what you're looking for. I'll ask a couple of quick questions to narrow it down, then build you a structured table.
               </p>
             </div>
-            {/* Suggestion chips */}
-            <div className="flex flex-wrap justify-center gap-2 mt-1">
-              {SUGGESTIONS.map(({ icon, label, prompt }) => (
-                <button
-                  key={label}
-                  onClick={() => send(prompt)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-l1 border border-outline-variant/30 text-sm font-sans text-on-surface-variant hover:text-on-surface hover:border-primary-container/40 hover:bg-primary-container/5 transition-all active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-primary-container/70" style={{ fontSize: 15 }}>{icon}</span>
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       ) : (
@@ -424,6 +411,22 @@ export default function Chat() {
       {/* Sticky input bar */}
       <div className="sticky bottom-0 z-20 bg-background/80 backdrop-blur-md px-8 pb-6 pt-4">
         <div className="w-full max-w-2xl mx-auto">
+
+          {/* Suggestion pills — always visible when chat is blank */}
+          {isEmpty && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {SUGGESTIONS.map(({ icon, label, prompt }) => (
+                <button
+                  key={label}
+                  onClick={() => send(prompt)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl glass-l1 border border-outline-variant/30 text-xs font-sans text-on-surface-variant hover:text-on-surface hover:border-primary-container/40 hover:bg-primary-container/5 transition-all active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-primary-container/70" style={{ fontSize: 14 }}>{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="glass-l1 border border-outline-variant/40 rounded-2xl px-4 py-3 flex items-end gap-3 focus-within:border-primary-container/50 transition-colors shadow-lg">
             <textarea
               ref={textareaRef}
