@@ -25,14 +25,18 @@ const isProd = process.env.NODE_ENV === 'production'
 app.use(helmet())
 
 // ── CORS ──────────────────────────────────────────────────────
+// Normalise each entry: lowercase, strip trailing slash
 const allowedOrigins = (process.env.FRONTEND_URL ?? 'http://localhost:5173')
   .split(',')
-  .map(o => o.trim())
+  .map(o => o.trim().toLowerCase().replace(/\/$/, ''))
 
 app.use(cors({
   origin: (origin, cb) => {
     // Allow server-to-server / curl in dev (no origin header)
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
+    if (!origin) return cb(null, true)
+    const normalised = origin.toLowerCase().replace(/\/$/, '')
+    if (allowedOrigins.includes(normalised)) return cb(null, true)
+    console.warn(`[CORS] blocked origin: ${origin} | allowed: ${allowedOrigins.join(', ')}`)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
   credentials: true,
